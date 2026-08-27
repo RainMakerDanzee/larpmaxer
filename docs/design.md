@@ -1,9 +1,7 @@
 # LarpMaxer Design System — "studio grade"
 
-> **Status: target spec, not yet shipped.** The current side panel
-> (`packages/extension/src/sidepanel/styles.css`) is a plain system-ui stylesheet with a blue
-> accent and no bundled fonts. This document is the design to build toward; nothing below
-> should be read as a description of today's UI.
+> **Status: shipped.** `packages/extension/src/sidepanel/styles.css` implements this system —
+> tokens, bundled fonts, the elevation scale, and the responsive panel/wide layouts.
 
 Inspiration: mapo.studio (analyzed 2026-08-27). We lift the *system*, not the brand: warm-light
 minimalism, one electric lime, soft-black cards for rhythm, mono microcopy, big friendly type at
@@ -84,7 +82,17 @@ repo — the current stylesheet uses the system font stack.)
   and per-employer accounts (Workday). Never blame the user; the copy is calm and specific.
 - **Status/phase badges**: mono 11px uppercase in a hairline pill; submitted = lime pill w/ ink text.
 - **Empty states**: two-tone display line + one primary action. E.g. "Nothing sent *yet.*"
-- **Hairlines everywhere, shadows almost nowhere** (only the floating nav gets 0 1px 2px rgba(0,0,0,.04)).
+- **Elevation** (revised 2026-08-28): surfaces are physical. Three tokens model one light
+  source above the panel: `--lift-1` (buttons, resting), `--lift-2` (cards, nav), `--lift-3`
+  (the two cards that demand attention: "your turn" and the review artifact). Each pairs a
+  tight contact shadow with a wider diffuse falloff, plus `--edge-top` — a 1px inset white
+  highlight that reads as light catching the top bevel.
+- **Raised vs recessed carries meaning.** Things you act *on* rise (cards, buttons); things you
+  type *into* are carved in (`--edge-inset` on inputs and repeater wells). Pressing a button
+  swaps its lift for the inset, so it physically sinks. Never decorate with depth that has no
+  meaning — a shadow is a claim about what the object is.
+- **Dark mode re-derives, never reuses.** Shadows on dark ground are near-black and the lit edge
+  drops to a 7% white rim; the same tokens, different values.
 
 ## Motion
 

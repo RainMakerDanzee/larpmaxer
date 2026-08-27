@@ -8,7 +8,15 @@
 //   icons/icon{16,48,128}.png
 // Usage: node esbuild.mjs [--watch]
 import * as esbuild from "esbuild";
-import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -108,7 +116,15 @@ const statics = [
 // Bundled font files (see styles.css @font-face) — copied as a directory.
 const fontsSrc = first(["src/sidepanel/fonts", "sidepanel/fonts"]);
 
-rmSync(dist, { recursive: true, force: true });
+// Clear dist's CONTENTS, never dist itself: on Windows the directory handle is
+// held open whenever Chrome has the unpacked extension loaded, and removing the
+// root fails with EPERM — which would break the build/reload loop contributors
+// actually use. Emptying in place keeps that loop working.
+if (existsSync(dist)) {
+  for (const entry of readdirSync(dist)) {
+    rmSync(join(dist, entry), { recursive: true, force: true });
+  }
+}
 mkdirSync(join(dist, "icons"), { recursive: true });
 
 for (const s of statics) {

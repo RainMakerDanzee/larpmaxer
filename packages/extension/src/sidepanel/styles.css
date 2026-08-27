@@ -36,7 +36,7 @@
   --ink-2: #323232;
   --ink-3: rgba(50, 50, 50, 0.55);
   --paper: #ffffff;
-  --paper-warm: #fcfff5;
+  --paper-warm: #f7faee;
   --surface: #f6f6f6;
   --lime: #d4fa70;
   --lime-soft: rgba(212, 250, 112, 0.35);
@@ -49,6 +49,18 @@
   --font-sans: "Manrope", "Aeonik", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Mono", monospace;
   --font-serif: "Instrument Serif", Georgia, serif;
+
+  /* elevation — contact shadow + diffuse falloff + a lit top edge.
+     Cards rise toward the viewer; inputs are carved into the surface. */
+  --lift-1: 0 1px 1px rgba(24, 22, 15, 0.05), 0 2px 4px -1px rgba(24, 22, 15, 0.05);
+  --lift-2:
+    0 1px 1px rgba(24, 22, 15, 0.05), 0 3px 6px -2px rgba(24, 22, 15, 0.07),
+    0 10px 18px -8px rgba(24, 22, 15, 0.1);
+  --lift-3:
+    0 1px 2px rgba(24, 22, 15, 0.07), 0 6px 12px -3px rgba(24, 22, 15, 0.1),
+    0 20px 32px -14px rgba(24, 22, 15, 0.16);
+  --edge-top: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --edge-inset: inset 0 1px 2px rgba(24, 22, 15, 0.07), inset 0 0 0 1px rgba(24, 22, 15, 0.02);
 
   /* radius, motion */
   --r-s: 6px;
@@ -86,6 +98,13 @@
     --hairline-2: rgba(255, 255, 255, 0.06);
     --danger: #ff8a5f;
     --ok: #a3e635;
+
+    /* On dark ground, depth reads through darker shadow + a faint top rim. */
+    --lift-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --lift-2: 0 2px 4px rgba(0, 0, 0, 0.45), 0 10px 20px -8px rgba(0, 0, 0, 0.6);
+    --lift-3: 0 3px 6px rgba(0, 0, 0, 0.5), 0 22px 36px -14px rgba(0, 0, 0, 0.7);
+    --edge-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    --edge-inset: inset 0 1px 3px rgba(0, 0, 0, 0.55);
   }
 }
 
@@ -120,7 +139,7 @@ body {
   background: var(--paper-warm);
   border: 1px solid var(--hairline);
   border-radius: 999px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--lift-2), var(--edge-top);
 }
 
 .tab {
@@ -184,12 +203,21 @@ body {
 
 .card {
   background: var(--paper);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--hairline-2);
   border-radius: var(--r-m);
   padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-shadow: var(--lift-2), var(--edge-top);
+  transition:
+    box-shadow var(--t-med) var(--ease),
+    transform var(--t-med) var(--ease);
+}
+
+/* Interactive cards respond to the cursor — the depth is real, not painted on. */
+.card:hover {
+  box-shadow: var(--lift-3), var(--edge-top);
 }
 
 .card-title {
@@ -201,6 +229,7 @@ body {
 .card.human {
   background: var(--paper-warm);
   border-left: 3px solid var(--lime);
+  box-shadow: var(--lift-3), var(--edge-top);
 }
 
 .card.human .card-title {
@@ -228,6 +257,7 @@ body {
   background: var(--ink);
   border-color: var(--ink);
   color: var(--paper);
+  box-shadow: var(--lift-3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -352,19 +382,28 @@ a:hover {
   border-radius: var(--r-s);
   padding: 8px 14px;
   cursor: pointer;
+  box-shadow: var(--lift-1), var(--edge-top);
   transition:
     transform var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease),
     filter var(--t-fast) var(--ease),
     border-color var(--t-fast) var(--ease);
 }
 
 .btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(0, 0, 0, 0.25);
+  box-shadow: var(--lift-2), var(--edge-top);
+  border-color: rgba(0, 0, 0, 0.18);
 }
 
+/* Pressed: the button sinks into the surface it was floating above. */
 .btn:active:not(:disabled) {
-  transform: none;
+  transform: translateY(1px);
+  box-shadow: var(--edge-inset);
+}
+
+.btn:disabled {
+  box-shadow: none;
 }
 
 .btn:disabled {
@@ -407,12 +446,22 @@ select,
 textarea {
   font: 400 13px/1.4 var(--font-sans);
   color: var(--ink);
-  background: var(--paper);
+  background: var(--surface);
   border: 1px solid var(--hairline);
   border-radius: var(--r-s);
-  padding: 7px 9px;
+  padding: 8px 10px;
   width: 100%;
-  transition: border-color var(--t-fast) var(--ease);
+  box-shadow: var(--edge-inset);
+  transition:
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  background: var(--paper);
 }
 
 input:hover,
@@ -480,6 +529,7 @@ textarea {
   background: var(--surface);
   border-radius: var(--r-m);
   padding: 10px;
+  box-shadow: var(--edge-inset);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -718,15 +768,26 @@ table.kv {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 22px;
   pointer-events: none;
   z-index: 60;
+  /* Soft wash so the seal reads as a moment, not an overlay on top of noise. */
+  background: radial-gradient(
+    circle at center,
+    rgba(141, 121, 221, 0.1),
+    rgba(252, 255, 245, 0.88) 62%
+  );
   animation: vibe-overlay 3s var(--ease) forwards;
 }
 
 .vibe-banner {
-  font: 400 30px/1 var(--font-sans);
-  letter-spacing: -0.03em;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: clamp(32px, 8.5vw, 58px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  text-align: center;
+  padding: 0 16px;
   color: var(--ink);
   animation: vibe-banner 3s var(--ease) forwards;
 }
@@ -738,8 +799,8 @@ table.kv {
 }
 
 .vibe-stamp {
-  width: 190px;
-  height: 190px;
+  width: clamp(210px, 56vw, 320px);
+  height: auto;
   transform: rotate(-12deg);
   animation: vibe-slam 3s var(--ease) forwards;
   filter: drop-shadow(0 2px 10px rgba(141, 121, 221, 0.25));
@@ -778,6 +839,13 @@ table.kv {
 }
 
 @media (prefers-color-scheme: dark) {
+  .vibe-overlay {
+    background: radial-gradient(
+      circle at center,
+      rgba(141, 121, 221, 0.16),
+      rgba(22, 22, 22, 0.9) 62%
+    );
+  }
   .vibe-banner em { color: #b7a6f2; }
   .vibe-stamp text { fill: #b7a6f2; }
   .vibe-stamp .vibe-ring { stroke: #9d8ae0; }
@@ -791,5 +859,10 @@ table.kv {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+  /* Elevation is static, so it stays — only the movement goes. */
+  .btn:hover:not(:disabled),
+  .btn:active:not(:disabled) {
+    transform: none;
   }
 }

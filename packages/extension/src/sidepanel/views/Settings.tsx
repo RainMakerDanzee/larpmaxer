@@ -54,27 +54,27 @@ function VibeStamp() {
       </div>
       <svg class="vibe-stamp" viewBox="0 0 240 240">
         <defs>
-          <path id="vibe-top" d="M 22 120 A 98 98 0 0 1 218 120" />
-          <path id="vibe-bottom" d="M 34 120 A 86 86 0 0 0 206 120" />
+          <path id="vibe-top" d="M 37 120 A 83 83 0 0 1 203 120" />
+          <path id="vibe-bottom" d="M 27 120 A 93 93 0 0 0 213 120" />
         </defs>
         <circle class="vibe-ring" cx="120" cy="120" r="112" stroke-width="4" />
         <circle class="vibe-ring" cx="120" cy="120" r="104" stroke-width="1.5" />
         <circle class="vibe-ring" cx="120" cy="120" r="72" stroke-width="2" />
-        <text font-size="13" letter-spacing="2.5">
+        <text font-size="13" letter-spacing="1.5">
           <textPath href="#vibe-top" startOffset="50%" text-anchor="middle">
             ✦ APPROVED BY THE EMPEROR ✦
           </textPath>
         </text>
-        <text font-size="13" letter-spacing="3">
+        <text font-size="13" letter-spacing="2">
           <textPath href="#vibe-bottom" startOffset="50%" text-anchor="middle">
             ★ OF VIBE CODING ★
           </textPath>
         </text>
-        <text x="120" y="106" text-anchor="middle" font-size="15" letter-spacing="2">CERTIFIED</text>
-        <text x="120" y="130" text-anchor="middle" font-size="22" font-weight="600" letter-spacing="1">VIBE</text>
-        <text x="120" y="152" text-anchor="middle" font-size="22" font-weight="600" letter-spacing="1">MAXER</text>
-        <text x="120" y="86" text-anchor="middle" font-size="10">★ ★ ★</text>
-        <text x="120" y="172" text-anchor="middle" font-size="10">★ ★ ★</text>
+        <text x="120" y="98" text-anchor="middle" font-size="15" letter-spacing="2.5">CERTIFIED</text>
+        <text x="120" y="127" text-anchor="middle" font-size="27" font-weight="700" letter-spacing="1">VIBE</text>
+        <text x="120" y="155" text-anchor="middle" font-size="27" font-weight="700" letter-spacing="1">MAXER</text>
+        <text x="120" y="76" text-anchor="middle" font-size="11" letter-spacing="1">★ ★ ★</text>
+        <text x="120" y="178" text-anchor="middle" font-size="11" letter-spacing="1">★ ★ ★</text>
       </svg>
     </div>
   );
