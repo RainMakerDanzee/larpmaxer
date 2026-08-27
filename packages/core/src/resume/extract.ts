@@ -4,7 +4,8 @@
  * The pipeline is deliberately split so each stage can fail independently and
  * the next one still has something to work with:
  *
- *   bytes → text        (PDF/DOCX/plain, done in the panel; see resume/text.ts)
+ *   bytes → text        (DOCX/plain in resume/text.ts; PDF still needs pdf.js,
+ *                        so the panel offers a paste-the-text fallback)
  *   text  → sections    (heuristic; this file)
  *   text  → contact     (regex; this file — email/phone/links approach ~99%)
  *   text  → experience  (heuristic date-range parsing; this file)

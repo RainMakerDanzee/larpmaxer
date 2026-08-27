@@ -47,7 +47,10 @@ npm run build
 1. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select
    `packages/extension/dist`.
 2. Click the LarpMaxer toolbar icon to open the side panel.
-3. Fill in your profile — the editor maps 1:1 to the `Profile` type, and
+3. Fill in your profile — the fastest way is to upload your resume under **Resumes**:
+   LarpMaxer reads it, shows you exactly what it found, and fills only the fields you have
+   left empty. `.docx` and plain text are read directly; for a PDF, paste the text instead.
+   The editor maps 1:1 to the `Profile` type, and
    [`examples/profile.example.json`](examples/profile.example.json) shows every field filled in.
    Add your Anthropic or OpenAI API key under **Settings**.
 4. Visit a Greenhouse, Lever, or Ashby posting and press **Fill**.

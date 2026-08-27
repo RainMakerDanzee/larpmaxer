@@ -1,8 +1,9 @@
 import { useEffect, useState } from "preact/hooks";
-import { emptyProfile } from "@larpmaxer/core";
+import { emptyProfile, extractResumeText, mergeIntoProfile, parseResume } from "@larpmaxer/core";
 import type {
   Education,
   Experience,
+  ParsedResume,
   Profile,
   QAEntry,
   ResumeRef,
@@ -10,9 +11,36 @@ import type {
 import {
   deleteResumeBytes,
   getProfile,
+  getResumeBytes,
   setProfile as persistProfile,
   storeResumeBytes,
 } from "../../background/storage";
+
+/** A resume that has been read but not yet merged — the user confirms first. */
+interface PendingImport {
+  parsed: ParsedResume;
+  /** Where it came from, for the card's heading. */
+  from: string;
+}
+
+/** One line naming everything the parse actually found; nothing it didn't. */
+function importSummary(p: ParsedResume): string {
+  const parts: string[] = [];
+  if (p.name !== undefined) parts.push("name");
+  if (p.email !== undefined) parts.push("email");
+  if (p.phone !== undefined) parts.push("phone");
+  if (p.links.length > 0) parts.push(`${p.links.length} link${p.links.length === 1 ? "" : "s"}`);
+  if (p.summary !== undefined) parts.push("summary");
+  if (p.skills.length > 0) parts.push(`${p.skills.length} skill${p.skills.length === 1 ? "" : "s"}`);
+  if (p.experience.length > 0) {
+    parts.push(`${p.experience.length} role${p.experience.length === 1 ? "" : "s"}`);
+  }
+  if (p.education.length > 0) {
+    const n = p.education.length;
+    parts.push(`${n} qualification${n === 1 ? "" : "s"}`);
+  }
+  return parts.length === 0 ? "nothing it could read confidently" : parts.join(", ");
+}
 
 /** Labelled single-line text input bound to one string value. */
 function Field(props: {
@@ -41,6 +69,11 @@ export function ProfileView() {
   // Skills are edited as one comma-separated string and parsed on Save.
   const [skillsText, setSkillsText] = useState("");
   const [flash, setFlash] = useState("");
+  // Resume import: read → confirm → merge. Never applied without the user.
+  const [pending, setPending] = useState<PendingImport | null>(null);
+  const [importNote, setImportNote] = useState("");
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
 
   useEffect(() => {
     void getProfile().then((stored) => {
@@ -89,6 +122,35 @@ export function ProfileView() {
     window.setTimeout(() => setFlash(""), 1500);
   };
 
+  /**
+   * The profile as it stands in the editor right now.
+   *
+   * Skills live in their own text box until Save, so reading them back here
+   * keeps an unsaved skills edit from looking empty to the merge — which would
+   * then overwrite it from the resume.
+   */
+  const liveProfile = (): Profile => ({
+    ...profile,
+    skills: skillsText
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s !== ""),
+  });
+
+  /** Read bytes into a pending import, or explain why they could not be read. */
+  const readResume = async (bytes: Uint8Array, filename: string): Promise<void> => {
+    setPending(null);
+    const result = await extractResumeText(bytes, filename);
+    if (!result.ok) {
+      setImportNote(result.message);
+      setPasteOpen(true);
+      return;
+    }
+    setImportNote("");
+    setPasteOpen(false);
+    setPending({ parsed: parseResume(result.text), from: filename });
+  };
+
   // Uploads persist immediately: the bytes are already in storage, so the ref
   // must not be lost to an unsaved edit session.
   const addResume = async (file: File): Promise<void> => {
@@ -97,10 +159,49 @@ export function ProfileView() {
       filename: file.name,
       mime: file.type === "" ? "application/octet-stream" : file.type,
     };
-    await storeResumeBytes(ref.id, new Uint8Array(await file.arrayBuffer()));
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    await storeResumeBytes(ref.id, bytes);
     const next: Profile = { ...profile, resumes: [...profile.resumes, ref] };
     setProfile(next);
     await persistProfile(next);
+    // The upload is safe on disk before anything is read from it, so a parse
+    // that fails costs the user nothing.
+    await readResume(bytes, file.name);
+  };
+
+  /** Re-read a resume already in storage — for files uploaded before this existed. */
+  const readStoredResume = async (ref: ResumeRef): Promise<void> => {
+    const bytes = await getResumeBytes(ref.id);
+    if (bytes === undefined) {
+      setImportNote(`"${ref.filename}" has no stored bytes — upload it again.`);
+      return;
+    }
+    await readResume(bytes, ref.filename);
+  };
+
+  /**
+   * Merge the pending import in. `mergeIntoProfile` fills only what is empty,
+   * so this can never clobber something the user typed.
+   */
+  const applyImport = async (): Promise<void> => {
+    if (!pending) return;
+    const merged = mergeIntoProfile(pending.parsed, liveProfile());
+    setProfile(merged);
+    setSkillsText(merged.skills.join(", "));
+    setPending(null);
+    setImportNote("");
+    setPasteOpen(false);
+    setPasteText("");
+    await persistProfile(merged);
+    setFlash("Filled from resume");
+    window.setTimeout(() => setFlash(""), 2000);
+  };
+
+  /** Parse pasted text — the fallback for PDFs and anything else unreadable. */
+  const readPastedText = (): void => {
+    if (pasteText.trim() === "") return;
+    setImportNote("");
+    setPending({ parsed: parseResume(pasteText), from: "pasted text" });
   };
 
   const removeResume = async (id: string): Promise<void> => {
@@ -410,6 +511,27 @@ export function ProfileView() {
       </div>
 
       <h2>Resumes</h2>
+
+      {pending && (
+        <div class="card intake">
+          <strong class="card-title">Read from {pending.from}</strong>
+          <p class="small">
+            Found {importSummary(pending.parsed)}. Filling only fills fields you have left
+            empty — nothing you have typed is overwritten.
+          </p>
+          <div class="row">
+            <button class="btn primary" onClick={() => void applyImport()}>
+              Fill empty fields
+            </button>
+            <button class="btn" onClick={() => setPending(null)}>
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {importNote !== "" && <p class="warn small">{importNote}</p>}
+
       <div class="repeater">
         {profile.resumes.map((r) => (
           <div key={r.id} class="item">
@@ -417,12 +539,15 @@ export function ProfileView() {
               <strong class="small">{r.filename}</strong>
               <span class="muted small">{r.mime}</span>
             </div>
+            <Field
+              label="Tag (job family, e.g. data)"
+              value={r.tag ?? ""}
+              onValue={(v) => setResumeTag(r.id, v)}
+            />
             <div class="row">
-              <Field
-                label="Tag (job family, e.g. data)"
-                value={r.tag ?? ""}
-                onValue={(v) => setResumeTag(r.id, v)}
-              />
+              <button class="btn" onClick={() => void readStoredResume(r)}>
+                Fill profile from this
+              </button>
               <button class="btn danger" onClick={() => void removeResume(r.id)}>
                 Remove
               </button>
@@ -433,7 +558,7 @@ export function ProfileView() {
           <span>Upload resume (stored only in this browser)</span>
           <input
             type="file"
-            accept=".pdf,.doc,.docx"
+            accept=".pdf,.doc,.docx,.txt,.md"
             onChange={(e) => {
               const file = e.currentTarget.files?.[0];
               e.currentTarget.value = "";
@@ -441,6 +566,42 @@ export function ProfileView() {
             }}
           />
         </label>
+      </div>
+
+      <div class="stack">
+        {!pasteOpen && (
+          <button class="btn" onClick={() => setPasteOpen(true)}>
+            Or paste your resume text
+          </button>
+        )}
+        {pasteOpen && (
+          <label class="field">
+            <span>Paste your resume text</span>
+            <textarea
+              rows={8}
+              value={pasteText}
+              placeholder="Select all in your PDF viewer, copy, and paste here"
+              onInput={(e) => setPasteText(e.currentTarget.value)}
+            />
+          </label>
+        )}
+        {pasteOpen && (
+          <div class="row">
+            <button class="btn primary" onClick={readPastedText} disabled={pasteText.trim() === ""}>
+              Read this text
+            </button>
+            <button
+              class="btn"
+              onClick={() => {
+                setPasteOpen(false);
+                setPasteText("");
+                setImportNote("");
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
 
       <div class="row">
