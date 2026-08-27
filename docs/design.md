@@ -87,6 +87,13 @@ repo — the current stylesheet uses the system font stack.)
   (the two cards that demand attention: "your turn" and the review artifact). Each pairs a
   tight contact shadow with a wider diffuse falloff, plus `--edge-top` — a 1px inset white
   highlight that reads as light catching the top bevel.
+- **Edge rails carry role.** Every card wears a 3px left rail whose colour states what the
+  block *is*, readable before a word of it: `--edge-neutral` passive info · `--edge-active`
+  work in progress · `--edge-ready` done/sent · `--edge-you` waiting on the human (the seal's
+  lavender, reused so "your turn" always looks the same). Errors take `--danger`. A vertical
+  scan of the queue tells you the state of every job without reading.
+- **Section labels end in a rule.** `h2` is a flex row whose `::after` fills the remaining width
+  with a hairline — a group of blocks reads as a group, at no extra visual weight.
 - **Raised vs recessed carries meaning.** Things you act *on* rise (cards, buttons); things you
   type *into* are carved in (`--edge-inset` on inputs and repeater wells). Pressing a button
   swaps its lift for the inset, so it physically sinks. Never decorate with depth that has no

@@ -155,7 +155,7 @@ function IntakeCard(props: {
   const [value, setValue] = useState("");
   const [save, setSave] = useState(true);
   return (
-    <div class="card">
+    <div class="card intake">
       <div class="card-title">{props.q.label}</div>
       <p class="muted small">{props.q.reason}</p>
       {props.q.options ? (

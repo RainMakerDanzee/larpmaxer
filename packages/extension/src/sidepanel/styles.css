@@ -45,6 +45,14 @@
   --hairline-2: rgba(0, 0, 0, 0.05);
   --danger: #b3401f;
 
+  /* edge rails — each block states its role in colour before you read a word.
+     neutral = passive info · active = work in progress · ready = done/success
+     · you = waiting on the human (ties to the seal's lavender) */
+  --edge-neutral: #d5d8c8;
+  --edge-active: #4a4a4a;
+  --edge-ready: #8fbf2f;
+  --edge-you: #8d79dd;
+
   /* type */
   --font-sans: "Manrope", "Aeonik", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Mono", monospace;
@@ -105,6 +113,11 @@
     --lift-3: 0 3px 6px rgba(0, 0, 0, 0.5), 0 22px 36px -14px rgba(0, 0, 0, 0.7);
     --edge-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
     --edge-inset: inset 0 1px 3px rgba(0, 0, 0, 0.55);
+
+    --edge-neutral: #46483c;
+    --edge-active: #9a9a9a;
+    --edge-ready: #a3e635;
+    --edge-you: #a695e8;
   }
 }
 
@@ -203,9 +216,10 @@ body {
 
 .card {
   background: var(--paper);
-  border: 1px solid var(--hairline-2);
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--edge-neutral);
   border-radius: var(--r-m);
-  padding: 14px;
+  padding: 14px 14px 14px 13px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -228,8 +242,13 @@ body {
 /* "Your turn" — the human-handoff moment. Calm, lime-edged, unmistakable. */
 .card.human {
   background: var(--paper-warm);
-  border-left: 3px solid var(--lime);
+  border-left-color: var(--edge-you);
   box-shadow: var(--lift-3), var(--edge-top);
+}
+
+/* An unanswered question is the same "waiting on you" family as the handover card. */
+.card.intake {
+  border-left-color: var(--edge-you);
 }
 
 .card.human .card-title {
@@ -256,6 +275,7 @@ body {
 .card.review {
   background: var(--ink);
   border-color: var(--ink);
+  border-left-color: var(--lime);
   color: var(--paper);
   box-shadow: var(--lift-3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
@@ -348,11 +368,22 @@ body {
 
 /* Eyebrow section labels — tiny mono caps, the mapo microcopy voice. */
 h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font: 500 11px/1 var(--font-mono);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--ink-3);
-  margin: 14px 0 2px;
+  margin: 16px 0 2px;
+}
+
+/* Trailing rule: turns a label into a section divider without adding weight. */
+h2::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hairline);
 }
 
 p {
@@ -742,13 +773,23 @@ table.kv {
   background: var(--danger);
 }
 
+.queue-card.status-opening,
+.queue-card.status-running {
+  border-left-color: var(--edge-active);
+}
+
 .queue-card.status-sent {
   background: var(--paper-warm);
+  border-left-color: var(--edge-ready);
 }
 
 .queue-card.status-review,
 .queue-card.status-awaiting_user {
-  border-left: 3px solid var(--lime);
+  border-left-color: var(--edge-you);
+}
+
+.queue-card.status-error {
+  border-left-color: var(--danger);
 }
 
 @keyframes pulse {
