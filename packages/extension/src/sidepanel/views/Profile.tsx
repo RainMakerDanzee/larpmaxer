@@ -1,5 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
-import { emptyProfile, extractResumeText, mergeIntoProfile, parseResume } from "@larpmaxer/core";
+import {
+  emptyProfile,
+  extractResumeText,
+  mergeIntoProfile,
+  parseResume,
+  profileGaps,
+} from "@larpmaxer/core";
 import type {
   Education,
   Experience,
@@ -106,6 +112,23 @@ export function ProfileView() {
   if (!profile) return <p class="muted">Loading profile...</p>;
 
   const patch = (p: Partial<Profile>): void => setProfile({ ...profile, ...p });
+
+  // Questions a form asked but nobody has answered yet, surfaced first so the
+  // backlog is what you see rather than something you scroll to find.
+  const unanswered = profile.qaBank.filter((q) => !q.approved && q.answer.trim() === "").length;
+  const qaOrdered = profile.qaBank
+    .map((q, i) => ({ q, i }))
+    .sort((a, b) => Number(a.q.approved) - Number(b.q.approved));
+
+  // Gaps are computed from the live editor state, so ticking a field off the
+  // list does not need a save first.
+  const gaps = profileGaps({
+    ...profile,
+    skills: skillsText
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s !== ""),
+  });
 
   const setLink = (i: number, p: Partial<Profile["links"][number]>): void =>
     patch({ links: profile.links.map((l, j) => (j === i ? { ...l, ...p } : l)) });
@@ -257,6 +280,28 @@ export function ProfileView() {
         </button>
         {flash !== "" && <span class="flash">{flash}</span>}
       </div>
+
+      {gaps.length > 0 && (
+        <div class="card">
+          <strong class="card-title">Still blank</strong>
+          <p class="small">
+            {gaps
+              .filter((g) => g.important)
+              .map((g) => g.label)
+              .join(", ") || "Nothing essential"}
+            {gaps.some((g) => g.important) ? " — forms ask for these constantly." : ""}
+          </p>
+          {gaps.some((g) => !g.important) && (
+            <p class="muted small">
+              Also empty: {gaps.filter((g) => !g.important).map((g) => g.label).join(", ")}.
+            </p>
+          )}
+          <p class="muted small">
+            A resume fills history and contact details; work rights, notice period and salary
+            are never in one, so they are yours to add once.
+          </p>
+        </div>
+      )}
 
       <h2>Contact</h2>
       <Field label="Full name" value={profile.name} onValue={(v) => patch({ name: v })} />
@@ -493,9 +538,24 @@ export function ProfileView() {
         Reusable answers to screening questions. Approved wording can be filled
         without asking you again.
       </p>
+      {unanswered > 0 && (
+        <div class="card intake">
+          <strong class="card-title">
+            {unanswered} question{unanswered === 1 ? "" : "s"} waiting for an answer
+          </strong>
+          <p class="small">
+            Real forms asked {unanswered === 1 ? "this" : "these"} and LarpMaxer could not answer
+            {unanswered === 1 ? " it" : " them"} from your profile. Answer below and tick
+            <strong> Approved</strong> — the next form that asks fills itself.
+          </p>
+        </div>
+      )}
       <div class="repeater">
-        {profile.qaBank.map((q, i) => (
+        {qaOrdered.map(({ q, i }) => (
           <div key={i} class="item">
+            {!q.approved && q.answer.trim() === "" && (
+              <span class="muted small">Asked by a form — not answered yet</span>
+            )}
             <Field
               label="Question"
               value={q.question}

@@ -3,7 +3,10 @@ import {
   emptyProfile,
   mergeQaEntry,
   normalizeQuestion,
+  profileGaps,
   ProfileValidationError,
+  recordOpenQuestion,
+  recordOpenQuestions,
   validateProfile,
 } from "../src/profile.js";
 import type { Profile, QAEntry } from "../src/types.js";
@@ -299,5 +302,91 @@ describe("mergeQaEntry", () => {
     const again = mergeQaEntry(profile, entry("???", "mystery v2"));
     expect(again.qaBank).toHaveLength(2);
     expect(again.qaBank[0]?.answer).toBe("mystery v2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Open questions: the bank grows from what real forms ask, not just from what
+// the user answered in the moment.
+// ---------------------------------------------------------------------------
+
+describe("recordOpenQuestion", () => {
+  it("remembers a question nobody answered, so it can be filled in later", () => {
+    const p = recordOpenQuestion(emptyProfile(), "How many years of Kubernetes do you have?");
+    expect(p.qaBank).toHaveLength(1);
+    expect(p.qaBank[0]).toMatchObject({ answer: "", approved: false, uses: 0 });
+  });
+
+  it("never overwrites an answer the user already gave", () => {
+    const answered = mergeQaEntry(emptyProfile(), {
+      question: "Do you require sponsorship?",
+      answer: "No",
+      approved: true,
+      uses: 3,
+    });
+    // Same question, differently worded and punctuated.
+    const after = recordOpenQuestion(answered, "Do you require sponsorship");
+    expect(after.qaBank).toHaveLength(1);
+    expect(after.qaBank[0]).toMatchObject({ answer: "No", approved: true, uses: 3 });
+  });
+
+  it("does not add the same question twice across runs", () => {
+    let p = recordOpenQuestion(emptyProfile(), "Why do you want to work here?");
+    p = recordOpenQuestion(p, "Why do you want to work here?");
+    p = recordOpenQuestion(p, "why do you WANT to work here");
+    expect(p.qaBank).toHaveLength(1);
+  });
+
+  it("ignores an empty question", () => {
+    expect(recordOpenQuestion(emptyProfile(), "   ").qaBank).toHaveLength(0);
+  });
+
+  it("leaves a blank placeholder unusable for filling", () => {
+    const p = recordOpenQuestion(emptyProfile(), "Notice period?");
+    // Unapproved entries are invisible to the answer engine, so an empty
+    // answer can never be typed into a form.
+    expect(p.qaBank.every((e) => !e.approved)).toBe(true);
+  });
+
+  it("records a batch, skipping ones already known", () => {
+    const p = recordOpenQuestions(emptyProfile(), ["First?", "Second?", "First?"]);
+    expect(p.qaBank.map((e) => e.question)).toEqual(["First?", "Second?"]);
+  });
+});
+
+describe("profileGaps", () => {
+  it("names what an empty profile still needs", () => {
+    const labels = profileGaps(emptyProfile()).map((g) => g.label);
+    expect(labels).toEqual(expect.arrayContaining(["Full name", "Email", "Work rights", "Resume file"]));
+  });
+
+  it("flags the fields no resume ever contains as important", () => {
+    const important = profileGaps(emptyProfile())
+      .filter((g) => g.important)
+      .map((g) => g.label);
+    expect(important).toEqual(expect.arrayContaining(["Work rights", "Notice period"]));
+    expect(important).not.toContain("Salary expectation");
+  });
+
+  it("reports nothing once the profile is complete", () => {
+    const full: Profile = {
+      ...emptyProfile(),
+      name: "Riley Park",
+      email: "riley@example.com",
+      phone: "+61 400 000 000",
+      location: "Sydney, NSW",
+      workRights: "Australian citizen",
+      noticePeriod: "4 weeks",
+      salary: "A$120,000",
+      summary: "Analyst.",
+      skills: ["SQL"],
+      links: [{ label: "GitHub", url: "https://github.com/rileypark" }],
+      experience: [
+        { title: "Analyst", company: "Acme", start: "2022-01", end: "present", highlights: [] },
+      ],
+      education: [{ institution: "Macquarie", qualification: "BIT" }],
+      resumes: [{ id: "r1", filename: "cv.docx", mime: "application/vnd" }],
+    };
+    expect(profileGaps(full)).toEqual([]);
   });
 });

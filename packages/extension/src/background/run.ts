@@ -25,7 +25,13 @@ import type {
   Message,
   ResolvedAnswer,
 } from "@larpmaxer/core";
-import { createProvider, makeLlmDelegate, resolveAnswers } from "@larpmaxer/core";
+import {
+  createProvider,
+  makeLlmDelegate,
+  mergeQaEntry,
+  recordOpenQuestions,
+  resolveAnswers,
+} from "@larpmaxer/core";
 import { pingTab, sendToRuntime, sendToTab, type Pong } from "../lib/messaging.js";
 import {
   addRecord,
@@ -151,6 +157,17 @@ export async function handleDiscoverResult(msg: Msg<"DISCOVER_RESULT">): Promise
     }
     const llm = await llmDelegate();
     const resolved = await resolveAnswers(msg.fields, profile, llm);
+    // Every question this form asked and we could not answer joins the bank
+    // unanswered, so the user can fill it in later instead of meeting it again
+    // on the next posting. Additive: an existing answer is never touched.
+    if (resolved.needsUser.length > 0) {
+      await setProfile(
+        recordOpenQuestions(
+          profile,
+          resolved.needsUser.map((q) => q.label),
+        ),
+      );
+    }
     run.plan = {
       adapterId: run.record.adapterId,
       url: run.record.url,
@@ -182,9 +199,17 @@ export async function handleIntakeAnswer(msg: Msg<"INTAKE_ANSWER">): Promise<voi
     if (msg.saveToQaBank) {
       const profile = await getProfile();
       if (profile !== undefined) {
+        // mergeQaEntry, not a push: the question is already in the bank as an
+        // unanswered placeholder, and a push would leave a duplicate behind.
         // approved: true — the user just authored this exact wording.
-        profile.qaBank.push({ question: question.label, answer: msg.value, approved: true, uses: 0 });
-        await setProfile(profile);
+        await setProfile(
+          mergeQaEntry(profile, {
+            question: question.label,
+            answer: msg.value,
+            approved: true,
+            uses: 0,
+          }),
+        );
       }
     }
     await planReady(run); // re-broadcasts; auto mode executes once the queue empties

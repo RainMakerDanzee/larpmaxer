@@ -223,6 +223,76 @@ function qaKey(question: string): string {
  * the existing entry in place (new wording/answer/approved win) but keeps the
  * higher `uses` count so re-answering never resets usage history.
  */
+/**
+ * Remember a question a form asked that nobody has answered yet.
+ *
+ * The bank is how LarpMaxer stops asking twice, but until now it only grew
+ * when the user answered in the moment. Anything skipped was forgotten, so the
+ * same question came back on the next posting. Recording it unanswered lets
+ * the user fill it in later, at leisure, and turns the bank into a picture of
+ * what real forms actually ask.
+ *
+ * Strictly additive: an existing entry is never touched, so this can never
+ * overwrite an answer the user already gave. Unapproved entries are invisible
+ * to `qaAnswer`, so a blank placeholder is never filled into a form.
+ */
+export function recordOpenQuestion(profile: Profile, question: string): Profile {
+  const text = question.trim();
+  if (text === "") return profile;
+  const key = qaKey(text);
+  if (profile.qaBank.some((existing) => qaKey(existing.question) === key)) return profile;
+  return {
+    ...profile,
+    qaBank: [...profile.qaBank, { question: text, answer: "", approved: false, uses: 0 }],
+  };
+}
+
+/** Record several questions at once, skipping any the bank already holds. */
+export function recordOpenQuestions(profile: Profile, questions: string[]): Profile {
+  return questions.reduce(recordOpenQuestion, profile);
+}
+
+/** A profile field the user has not filled in, named the way the editor names it. */
+export interface ProfileGap {
+  /** Field label as shown in the Profile tab. */
+  label: string;
+  /** True when a fill will usually stall without it. */
+  important: boolean;
+}
+
+/**
+ * Which parts of the profile are still empty.
+ *
+ * A resume fills contact details and history well and says nothing about work
+ * rights, notice period or salary — the things almost every application asks
+ * and no CV contains. Naming those gaps turns "the import missed things" into
+ * a short, finishable list.
+ */
+export function profileGaps(profile: Profile): ProfileGap[] {
+  const blank = (s: string | undefined): boolean => (s ?? "").trim() === "";
+  const gaps: ProfileGap[] = [];
+
+  const add = (label: string, missing: boolean, important = true): void => {
+    if (missing) gaps.push({ label, important });
+  };
+
+  add("Full name", blank(profile.name));
+  add("Email", blank(profile.email));
+  add("Phone", blank(profile.phone));
+  add("Location", blank(profile.location));
+  add("Work rights", blank(profile.workRights));
+  add("Notice period", blank(profile.noticePeriod));
+  add("Resume file", profile.resumes.length === 0);
+  add("Professional summary", blank(profile.summary), false);
+  add("Skills", profile.skills.length === 0, false);
+  add("Experience", profile.experience.length === 0, false);
+  add("Education", profile.education.length === 0, false);
+  add("Salary expectation", blank(profile.salary), false);
+  add("Links", profile.links.length === 0, false);
+
+  return gaps;
+}
+
 export function mergeQaEntry(profile: Profile, entry: QAEntry): Profile {
   const key = qaKey(entry.question);
   const qaBank = profile.qaBank.slice();
