@@ -16,7 +16,8 @@
     "build": "npm run build --workspaces",
     "test": "vitest run",
     "typecheck": "tsc -b packages/core packages/extension",
-    "e2e": "node packages/extension/e2e/run.mjs"
+    "e2e": "node packages/extension/e2e/run.mjs",
+    "icons": "node packages/extension/icons/render.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.7",

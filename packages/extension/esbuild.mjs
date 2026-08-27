@@ -24,14 +24,6 @@ const pkgDir = dirname(fileURLToPath(import.meta.url));
 const dist = join(pkgDir, "dist");
 const watch = process.argv.includes("--watch");
 
-// Solid #4F46E5 placeholder icons, pre-generated so the build needs no image
-// tooling. Swap these constants (or overwrite dist/icons/) for real art.
-const ICON_PNG_BASE64 = {
-  16: "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR42mPwd3v6nxLMMGrAqAGjBgwXAwC/zHkfeRAWwgAAAABJRU5ErkJggg==",
-  48: "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAARUlEQVR42u3PIQ0AAAgAMNJh6R+AHFABy3bxAI/Kns9CQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQOBqAcEtQkvq8IRQAAAAAElFTkSuQmCC",
-  128: "iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAA80lEQVR42u3SMQ0AAAjAMNTx4l8AOsAGCT1mYGlU9uhvYQIARgAgAASAABAAAkAACAABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEgAAAwAQAjABAAAgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAANCNFpKgSUOjMEhxAAAAAElFTkSuQmCC",
-};
-
 /** First candidate (relative to the package dir) that exists, else null. */
 function first(candidates) {
   for (const c of candidates) {
@@ -140,8 +132,15 @@ for (const s of statics) {
 
 if (fontsSrc) cpSync(fontsSrc, join(dist, "sidepanel", "fonts"), { recursive: true });
 
-for (const [size, base64] of Object.entries(ICON_PNG_BASE64)) {
-  writeFileSync(join(dist, "icons", `icon${size}.png`), Buffer.from(base64, "base64"));
+// Real icons, rendered from icons/icon.svg by `npm run icons` and committed,
+// so a build needs no image tooling and no browser.
+for (const size of [16, 48, 128]) {
+  const name = `icon${size}.png`;
+  const src = join(pkgDir, "icons", name);
+  if (!existsSync(src)) {
+    throw new Error(`larpmaxer build: missing icons/${name} — run \`npm run icons\``);
+  }
+  copyFileSync(src, join(dist, "icons", name));
 }
 
 /** @type {import("esbuild").BuildOptions[]} */

@@ -11,7 +11,7 @@ engine. It fills job application forms from a profile that lives entirely on you
 types what you would type, pauses when it doesn't know something, and — unless you explicitly
 opt into auto mode — submits nothing until you have seen exactly what it filled.
 
-<!-- screenshot: side panel open next to a Greenhouse posting, "Fillable: greenhouse" chip visible — docs/img/hero.png -->
+![The LarpMaxer side panel: a queue of postings colour-coded by state, the current tab detected as a Greenhouse form, and two questions it could not answer truthfully waiting for you.](docs/img/hero.png)
 
 ## How it works
 
@@ -31,7 +31,10 @@ opt into auto mode — submits nothing until you have seen exactly what it fille
    filename. You click **Approve & Submit**; LarpMaxer clicks submit, verifies the success
    message, and records the application.
 
-<!-- gif: the full fill-review-approve loop on a Lever posting — docs/img/fill-loop.gif -->
+<!-- A fill-loop GIF belongs here, recorded against a real posting. It is
+     deliberately not generated from the e2e fixture: that page is bare test
+     markup, so a recording of it would look nothing like filling a real
+     application. Record it live, review-gate on, and drop it in docs/img/. -->
 
 ## Quickstart
 
