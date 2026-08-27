@@ -18,3 +18,4 @@ export * from "./llm/index.js";
 export * from "./messages.js";
 export * from "./ledger.js";
 export * from "./registration.js";
+export * from "./resume/extract.js";
