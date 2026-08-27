@@ -1,8 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { FormField, LlmMessage, LlmProvider, Profile, ResumeRef } from "../src/types.js";
 import { makeLlmDelegate } from "../src/llm/answerDelegate.js";
 import { UNKNOWN_ANSWER, buildAnswerMessages } from "../src/llm/prompts.js";
 import { DEFAULT_MODELS, LlmError, createProvider, httpError } from "../src/llm/provider.js";
+import {
+  chromeAiAvailability,
+  chromeAiUsable,
+  createChromeAiProvider,
+  promptOnDevice,
+} from '../src/llm/chromeAi.js';
 
 const resumeRef: ResumeRef = {
   id: "r1",
@@ -162,7 +168,119 @@ describe("createProvider", () => {
   });
 
   it("ships the expected default models", () => {
-    expect(DEFAULT_MODELS).toEqual({ anthropic: "claude-sonnet-5", openai: "gpt-5.2" });
+    expect(DEFAULT_MODELS).toEqual({
+      anthropic: "claude-sonnet-5",
+      openai: "gpt-5.2",
+      chrome: "gemini-nano",
+    });
+  });
+});
+
+/**
+ * The on-device provider is the zero-setup default: no key, no account, local.
+ * These cases pin the two behaviours the product depends on — honest
+ * availability reporting, and never pretending to work when it cannot.
+ */
+describe("Chrome built-in AI provider", () => {
+  const globalRef = globalThis as { LanguageModel?: unknown };
+
+  afterEach(() => {
+    delete globalRef.LanguageModel;
+  });
+
+  it("reports unavailable when the browser has no LanguageModel API", async () => {
+    delete globalRef.LanguageModel;
+    expect(await chromeAiAvailability()).toBe("unavailable");
+    expect(await chromeAiUsable()).toBe(false);
+  });
+
+  it("reports unavailable when the API exists but the device cannot run the model", async () => {
+    globalRef.LanguageModel = {
+      availability: async () => "unavailable",
+      create: async () => ({ prompt: async () => "" }),
+    };
+    expect(await chromeAiAvailability()).toBe("unavailable");
+  });
+
+  it("passes through downloadable so the panel can explain the one-time download", async () => {
+    globalRef.LanguageModel = {
+      availability: async () => "downloadable",
+      create: async () => ({ prompt: async () => "" }),
+    };
+    expect(await chromeAiAvailability()).toBe("downloadable");
+    expect(await chromeAiUsable()).toBe(true);
+  });
+
+  it("treats an unrecognised availability string as unavailable rather than guessing", async () => {
+    globalRef.LanguageModel = {
+      availability: async () => "some-future-state",
+      create: async () => ({ prompt: async () => "" }),
+    };
+    expect(await chromeAiAvailability()).toBe("unavailable");
+  });
+
+  it("survives an API that throws on interrogation", async () => {
+    globalRef.LanguageModel = {
+      availability: async () => {
+        throw new Error("policy blocked");
+      },
+      create: async () => ({ prompt: async () => "" }),
+    };
+    expect(await chromeAiAvailability()).toBe("unavailable");
+  });
+
+  it("folds system messages into session context and the turn into the prompt", async () => {
+    let seenSystem = "";
+    let seenPrompt = "";
+    let destroyed = false;
+    globalRef.LanguageModel = {
+      availability: async () => "available",
+      create: async (opts?: { initialPrompts?: { content: string }[] }) => {
+        seenSystem = opts?.initialPrompts?.[0]?.content ?? "";
+        return {
+          prompt: async (input: string) => {
+            seenPrompt = input;
+            return "Sydney";
+          },
+          destroy: () => {
+            destroyed = true;
+          },
+        };
+      },
+    };
+    const provider = createChromeAiProvider();
+    const out = await provider.complete([
+      { role: "system", content: "Answer only from the profile." },
+      { role: "user", content: "Which city?" },
+    ]);
+    expect(out).toBe("Sydney");
+    expect(seenSystem).toContain("Answer only from the profile.");
+    expect(seenPrompt).toContain("Which city?");
+    expect(destroyed).toBe(true); // sessions must be released, not leaked
+  });
+
+  it("forwards a JSON schema so option answers are constrained at sampling time", async () => {
+    let seenConstraint: unknown;
+    globalRef.LanguageModel = {
+      availability: async () => "available",
+      create: async () => ({
+        prompt: async (_input: string, options?: { responseConstraint?: unknown }) => {
+          seenConstraint = options?.responseConstraint;
+          return '"Yes"';
+        },
+      }),
+    };
+    const schema = { type: "string", enum: ["Yes", "No"] };
+    const out = await promptOnDevice([{ role: "user", content: "Sponsorship?" }], schema);
+    expect(out).toBe('"Yes"');
+    expect(seenConstraint).toEqual(schema);
+  });
+
+  it("raises an actionable LlmError instead of hanging when unavailable", async () => {
+    delete globalRef.LanguageModel;
+    await expect(promptOnDevice([{ role: "user", content: "hi" }])).rejects.toThrow(
+      /not available/i,
+    );
   });
 });
 

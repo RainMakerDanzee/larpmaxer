@@ -9,11 +9,14 @@ import type { LlmConfig, LlmProvider } from "../types.js";
 // if a no-cycle lint is ever added, move the error helpers to llm/errors.ts.
 import { createAnthropicProvider } from "./anthropic.js";
 import { createOpenAiProvider } from "./openai.js";
+import { createChromeAiProvider } from "./chromeAi.js";
 
 /** Model used when the user has not chosen one, per provider. */
 export const DEFAULT_MODELS = {
   anthropic: "claude-sonnet-5",
   openai: "gpt-5.2",
+  // The on-device model is whatever the browser ships; the field is inert.
+  chrome: "gemini-nano",
 } as const satisfies Record<LlmProvider["id"], string>;
 
 /** Error raised by an LLM provider; `status` is set for HTTP failures. */
@@ -55,6 +58,8 @@ export function createProvider(cfg: LlmConfig): LlmProvider {
       return createAnthropicProvider(cfg);
     case "openai":
       return createOpenAiProvider(cfg);
+    case "chrome":
+      return createChromeAiProvider();
     default: {
       // Exhaustive over LlmProvider["id"]; reachable only from untyped callers.
       const unknown: never = cfg.provider;
@@ -64,6 +69,8 @@ export function createProvider(cfg: LlmConfig): LlmProvider {
 }
 
 function statusHint(status: number): string | undefined {
+  // Note: the on-device provider never produces HTTP failures, so it never
+  // reaches this mapper — its errors are constructed directly in chromeAi.ts.
   if (status === 401 || status === 403) return "Check your API key";
   if (status === 404) return "Model not found — check the model name in Settings";
   if (status === 429) return "Rate limited — try again in a moment";

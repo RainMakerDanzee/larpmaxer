@@ -1,10 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
-import { DEFAULT_MODELS } from "@larpmaxer/core";
+import { chromeAiAvailability, DEFAULT_MODELS } from "@larpmaxer/core";
 import type { AutonomyMode, LlmConfig, LlmProvider } from "@larpmaxer/core";
 import { getSettings, setSettings, type Settings } from "../../background/storage";
 
-const PROVIDERS: readonly LlmProvider["id"][] = ["anthropic", "openai"];
+const PROVIDERS: readonly LlmProvider["id"][] = ["chrome", "anthropic", "openai"];
 const PROVIDER_LABELS: Record<LlmProvider["id"], string> = {
+  chrome: "Chrome built-in AI (no key needed)",
   anthropic: "Anthropic",
   openai: "OpenAI",
 };
@@ -14,6 +15,19 @@ const defaultModel = (p: LlmProvider["id"]): string => DEFAULT_MODELS[p];
 // The Message union has no key-test type, so the probe calls the provider
 // directly from the panel. Needs host permissions for both API origins.
 async function probeKey(cfg: LlmConfig): Promise<string> {
+  if (cfg.provider === "chrome") {
+    const state = await chromeAiAvailability();
+    switch (state) {
+      case "available":
+        return "Ready — running on your device, no key needed.";
+      case "downloadable":
+        return "Supported. The model downloads on first use (a few hundred MB, once).";
+      case "downloading":
+        return "The model is downloading now — try again shortly.";
+      default:
+        return "Not available on this device. Add an API key below, or leave the LLM off and answer questions yourself.";
+    }
+  }
   try {
     if (cfg.provider === "anthropic") {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -116,10 +130,12 @@ export function SettingsView() {
 
   const save = async (): Promise<void> => {
     // No key means LLM answering stays off (Settings.llm unset by contract).
-    const next: Settings =
-      apiKey.trim() === ""
-        ? { autonomy, saveArtifacts, autoRegister }
-        : { autonomy, saveArtifacts, autoRegister, llm: { provider, apiKey, model } };
+    // The on-device provider is configured by choosing it; every other
+    // provider is inert without a key, so an empty key means "LLM off".
+    const usable = provider === "chrome" || apiKey.trim() !== "";
+    const next: Settings = usable
+      ? { autonomy, saveArtifacts, autoRegister, llm: { provider, apiKey, model } }
+      : { autonomy, saveArtifacts, autoRegister };
     await setSettings(next);
     setFlash("Saved");
     window.setTimeout(() => setFlash(""), 1500);
@@ -198,6 +214,7 @@ export function SettingsView() {
           ))}
         </select>
       </label>
+      {provider !== "chrome" && (
       <label class="field">
         <span>Model</span>
         <input
@@ -207,6 +224,8 @@ export function SettingsView() {
           onInput={(e) => setModel(e.currentTarget.value)}
         />
       </label>
+      )}
+      {provider !== "chrome" && (
       <label class="field">
         <span>API key</span>
         <input
@@ -217,9 +236,11 @@ export function SettingsView() {
           onInput={(e) => setApiKey(e.currentTarget.value)}
         />
       </label>
+      )}
       <p class="muted small">
-        Stays in this browser, sent only to your chosen provider.
-        Empty = LLM answering off.
+        {provider === "chrome"
+          ? "Runs on your machine using the model built into Chrome. No key, no account, no cost — and nothing leaves your device. Not every machine can run it; test below."
+          : "Stays in this browser, sent only to your chosen provider. Empty = LLM answering off."}
       </p>
 
       <div class="row">
@@ -228,10 +249,10 @@ export function SettingsView() {
         </button>
         <button
           class="btn"
-          disabled={apiKey.trim() === "" || testing}
+          disabled={(provider !== "chrome" && apiKey.trim() === "") || testing}
           onClick={() => void test()}
         >
-          {testing ? "Testing..." : "Test key"}
+          {testing ? "Checking..." : provider === "chrome" ? "Check availability" : "Test key"}
         </button>
         {flash !== "" && <span class="flash">{flash}</span>}
       </div>

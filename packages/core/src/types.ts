@@ -318,13 +318,15 @@ export interface LlmMessage {
 }
 
 export interface LlmProvider {
-  id: "anthropic" | "openai";
+  /** `chrome` is the browser's own on-device model: no key, no account, local. */
+  id: "anthropic" | "openai" | "chrome";
   /** Complete a prompt; implementations must not stream. */
   complete(messages: LlmMessage[], opts?: { maxTokens?: number }): Promise<string>;
 }
 
 export interface LlmConfig {
   provider: LlmProvider["id"];
+  /** Unused by the on-device provider, which needs no credential. */
   apiKey: string;
   model: string;
 }

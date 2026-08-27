@@ -10,5 +10,12 @@
 export * from "./provider.js";
 export { createAnthropicProvider } from "./anthropic.js";
 export { createOpenAiProvider } from "./openai.js";
+export {
+  createChromeAiProvider,
+  chromeAiAvailability,
+  chromeAiUsable,
+  promptOnDevice,
+  type ChromeAiAvailability,
+} from "./chromeAi.js";
 export * from "./prompts.js";
 export { makeLlmDelegate, type DelegateAnswer } from "./answerDelegate.js";
