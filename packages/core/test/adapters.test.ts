@@ -18,7 +18,7 @@ function docFrom(html: string): Document {
   return new DOMParser().parseFromString(html, "text/html");
 }
 
-function fixture(name: "greenhouse" | "lever" | "ashby"): Document {
+function fixture(name: "greenhouse" | "lever" | "ashby" | "job-search-page"): Document {
   // vitest's jsdom environment rewrites import.meta.url to a root-relative
   // file URL, so try cwd-based paths (repo root via the root vitest.config.ts,
   // or packages/core when run from there) before URL resolution for plain node.
@@ -300,5 +300,59 @@ describe("registry", () => {
 
   it("returns null when the page has no plausible application form", () => {
     expect(pickAdapter("https://example.com/about", docFrom(NOT_A_FORM))).toBeNull();
+  });
+
+  /**
+   * Regression, found live on 2026-08-28: on a SEEK search-results page the
+   * generic adapter claimed the page and offered the user their own search
+   * refinements ("Show salary range refinements.Pay", "Strong applicant jobs")
+   * as questions to answer. A listing page is never an application.
+   */
+  describe("job-board search pages are not application forms", () => {
+    const searchPage = (): Document => fixture("job-search-page");
+
+    it("refuses to claim a search-results page", () => {
+      expect(generic.detect("https://au.seek.com/technology-sales-jobs", searchPage())).toBe(false);
+      expect(pickAdapter("https://au.seek.com/technology-sales-jobs", searchPage())).toBeNull();
+    });
+
+    it("discovers no fields there even if asked directly", () => {
+      expect(generic.discover(searchPage())).toEqual([]);
+    });
+
+    it("in particular never offers the refinement or toggle that leaked before", () => {
+      const labels = generic.discover(searchPage()).map((f) => f.label);
+      expect(labels).not.toContain("Show salary range refinements.Pay");
+      expect(labels).not.toContain("Strong applicant jobs");
+    });
+  });
+
+  describe("real application forms still pass the stricter gate", () => {
+    it("claims a form whose only strong signal is a resume upload plus a submit", () => {
+      const doc = docFrom(`<form>
+        <label for="nm">Full name</label><input id="nm" type="text">
+        <label for="cv">Resume</label><input id="cv" type="file">
+        <button type="submit">Submit application</button>
+      </form>`);
+      expect(generic.detect("https://careers.example.com/apply", doc)).toBe(true);
+      expect(generic.discover(doc).map((f) => f.label)).toContain("Full name");
+    });
+
+    it("ignores site chrome that surrounds a genuine form", () => {
+      const doc = docFrom(`<div>
+        <form role="search"><input type="search" id="q" placeholder="Search jobs"></form>
+        <form id="app">
+          <label for="e">Email</label><input id="e" type="email">
+          <label for="n">Name</label><input id="n" type="text">
+          <label for="r">Resume</label><input id="r" type="file">
+          <button type="submit">Apply</button>
+        </form>
+        <footer><label for="nl">Newsletter</label><input id="nl" type="email"></footer>
+      </div>`);
+      const labels = generic.discover(doc).map((f) => f.label);
+      expect(labels).toEqual(expect.arrayContaining(["Email", "Name", "Resume"]));
+      expect(labels).not.toContain("Search jobs");
+      expect(labels).not.toContain("Newsletter");
+    });
   });
 });
