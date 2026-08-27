@@ -1,7 +1,9 @@
 # Privacy
 
-Short version: LarpMaxer has no server. Your data lives in your browser, and the only network
-requests the extension ever makes go to the LLM provider you configured, using your own API key.
+Short version: LarpMaxer has no server. Your data lives in your browser. On the default
+on-device model the extension makes no LLM network requests at all — the model ships with
+Chrome and runs on your machine. If you choose a cloud provider instead, the only requests it
+ever makes go to that provider, using your own API key.
 
 ## What is stored, and exactly where
 
@@ -13,7 +15,7 @@ is no "us" to transmit to. These are the exact keys:
 |---|---|
 | `profile` | Your `Profile`: name, email, phone, location, links, work rights, notice period, salary expectation, summary, skills, experience, education, the Q&A bank, and resume metadata |
 | `resume:<id>` | The bytes of one uploaded resume file (base64), keyed by its `ResumeRef` id |
-| `settings` | Autonomy mode (`review` or `auto`) plus your `LlmConfig`: provider choice, model name, and your API key |
+| `settings` | Autonomy mode (`review` or `auto`) plus your `LlmConfig`: provider choice, model name, and your API key if you set one (the default on-device provider has none) |
 | `records` | Your `ApplicationRecord` history — which jobs were filled and submitted, when, with what report |
 | `queue` | The list of job links you dropped into "Apply to anything", with their status |
 | `credentials` | Any portal accounts LarpMaxer created for you (origin + email + the generated password), if you enabled **Create portal accounts for me**. Empty otherwise. |

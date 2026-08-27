@@ -22,13 +22,19 @@ Two things it will never do regardless of site policy: submit without a configur
 path, and put a claim in a form that doesn't come from your profile. What employers receive is
 your real information — the same content you would have typed, minus the typing.
 
-## Why do I have to bring my own API key?
+## Do I need an API key?
 
-Because there is no server. A hosted key would mean your applications — your name, phone,
-salary expectations, work history — routing through infrastructure someone else operates. That
-is the opposite of the design. With your own key: you pay your provider directly, you can see
-every request in your provider dashboard, you can cap and revoke it, and LarpMaxer's authors
-never see any of it.
+No. The default is the model built into Chrome: no key, no account, no cost, and the text never
+leaves your machine. Open Settings once to download it if the panel says it needs downloading.
+Roughly half of desktop Chrome installs can run it; the rest, and every mobile browser, cannot
+— and there LarpMaxer simply asks you the questions it would have asked the model, which is the
+same loop it uses for anything it can't answer truthfully.
+
+You can use Anthropic or OpenAI instead, with your own key. There is no hosted option, because
+a hosted key would mean your applications — your name, phone, salary expectations, work history
+— routing through infrastructure someone else operates, which is the opposite of the design.
+With your own key you pay your provider directly, see every request in their dashboard, and can
+cap or revoke it.
 
 Use a dedicated key with a spending cap. A full application costs a few cents of tokens; most
 fields never touch the LLM at all because they resolve straight from your profile or Q&A bank.

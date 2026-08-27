@@ -10,7 +10,9 @@ import {
   findAuthForm,
   attachFile,
   comboboxSelect,
+  findNextControl,
   needsTrustedKeyboard,
+  pageSignature,
   pickAdapter,
   readBack,
   setCheckbox as setNativeCheckbox,
@@ -18,6 +20,7 @@ import {
 } from "@larpmaxer/core";
 import type {
   Adapter,
+  AdapterQuirks,
   FieldKind,
   FieldReport,
   FillPlan,
@@ -205,25 +208,92 @@ async function executePlan(tabId: number, plan: FillPlan): Promise<Message> {
     return { type: "FILL_REPORT", tabId, report };
   }
 
-  // Selectors can go stale between discover and execute on SPA forms, so
-  // re-discover now and join the plan's answers to live fields by id.
-  const fields = new Map(adapter.discover(document).map((f) => [f.id, f] as const));
   const quirks = adapter.quirks ?? {};
+  // Answers still looking for a home. On a single-page form this empties in
+  // one pass; on a paginated one it drains across steps, and whatever is left
+  // at the end genuinely was not on the form.
+  const unplaced = new Map(plan.answers.map((a) => [a.fieldId, a] as const));
+  // Required fields with no answer, keyed so a field seen on two steps is
+  // reported once.
+  const unanswered = new Map<string, FieldReport>();
+  /** Every required field seen on any step, for the completeness verdict. */
+  const requiredIds = new Set<string>();
+  const seenPages = new Set<string>();
+  let pages = 0;
 
+  for (;;) {
+    pages++;
+    // Selectors can go stale between discover and execute on SPA forms, so
+    // re-discover now and join the plan's answers to live fields by id.
+    const fields = new Map(adapter.discover(document).map((f) => [f.id, f] as const));
+
+    // A step whose fields we have already filled means the Next click did not
+    // advance. Stopping is the only safe response: clicking on would be
+    // guessing at a control that is not moving the form.
+    const signature = pageSignature([...fields.keys()]);
+    if (seenPages.has(signature)) break;
+    seenPages.add(signature);
+
+    await fillVisible(fields, unplaced, unanswered, requiredIds, report, quirks);
+
+    if (quirks.paginated !== true || pages >= MAX_FORM_PAGES) break;
+    const next = findNextControl(document, quirks.nextSelector);
+    // No forward control means this is the last step. It is never a reason to
+    // click something else — a stray click here submits a half-filled form.
+    if (next === null) break;
+    next.click();
+    await sleep(PAGE_SETTLE_MS);
+  }
+
+  for (const answer of unplaced.values()) {
+    report.fields.push({
+      fieldId: answer.fieldId,
+      label: answer.fieldId,
+      outcome: "failed",
+      error: "field not found on page",
+    });
+  }
+  for (const entry of unanswered.values()) report.fields.push(entry);
+
+  // Unchanged meaning from the single-page version — every required field
+  // reports filled or verified — but gathered across every step traversed.
+  const outcomes = new Map(report.fields.map((f) => [f.fieldId, f.outcome] as const));
+  report.complete = [...requiredIds].every((id) => {
+    const outcome = outcomes.get(id);
+    return outcome === "filled" || outcome === "verified";
+  });
+
+  return { type: "FILL_REPORT", tabId, report };
+}
+
+/** How many steps of a paginated form to traverse before giving up. */
+const MAX_FORM_PAGES = 12;
+/** Time for a step transition to render before re-discovering. */
+const PAGE_SETTLE_MS = 900;
+
+/**
+ * Fill every plan answer whose field is on the step currently displayed.
+ *
+ * Answers it places are removed from `unplaced`, so a later step never refills
+ * them and anything remaining at the end is genuinely absent from the form.
+ */
+async function fillVisible(
+  fields: Map<string, FormField>,
+  unplaced: Map<string, ResolvedAnswer>,
+  unanswered: Map<string, FieldReport>,
+  requiredIds: Set<string>,
+  report: FillReport,
+  quirks: AdapterQuirks,
+): Promise<void> {
   const pending: PendingVerification[] = [];
-  for (const answer of plan.answers) {
-    const field = fields.get(answer.fieldId);
-    if (field === undefined) {
-      report.fields.push({
-        fieldId: answer.fieldId,
-        label: answer.fieldId,
-        outcome: "failed",
-        error: "field not found on page",
-      });
-      continue;
-    }
+  for (const field of fields.values()) if (field.required) requiredIds.add(field.id);
+
+  for (const [fieldId, answer] of [...unplaced]) {
+    const field = fields.get(fieldId);
+    if (field === undefined) continue; // maybe on a later step
     const el = document.querySelector<HTMLElement>(field.selector);
     if (el === null) {
+      unplaced.delete(fieldId);
       report.fields.push({
         fieldId: field.id,
         label: field.label,
@@ -235,6 +305,7 @@ async function executePlan(tabId: number, plan: FillPlan): Promise<Message> {
     // Hard product-rule guard (humans own credentials): even if an adapter
     // ever discovers one, a password (or hidden) input is never filled.
     if (el instanceof HTMLInputElement && (el.type === "password" || el.type === "hidden")) {
+      unplaced.delete(fieldId);
       report.fields.push({
         fieldId: field.id,
         label: field.label,
@@ -243,6 +314,7 @@ async function executePlan(tabId: number, plan: FillPlan): Promise<Message> {
       });
       continue;
     }
+    unplaced.delete(fieldId);
     // Text-like kinds in trustedKeyboardOnly get keystroke simulation below;
     // a non-text kind in that list (e.g. combobox) is core's own job to honour.
     const usedTrustedTyping = needsTrustedKeyboard(field, quirks) && isTextLike(field.kind);
@@ -260,20 +332,20 @@ async function executePlan(tabId: number, plan: FillPlan): Promise<Message> {
 
   for (const p of pending) report.fields.push(verifyField(p));
 
-  // Required fields the plan never answered still count against completeness.
-  const answered = new Set(plan.answers.map((a) => a.fieldId));
+  // Required fields no answer reached. Recorded rather than reported now, so a
+  // field answered on a later step can clear itself.
+  const filled = new Set(report.fields.map((f) => f.fieldId));
   for (const field of fields.values()) {
-    if (field.required && !answered.has(field.id)) {
-      report.fields.push({ fieldId: field.id, label: field.label, outcome: "skipped", error: "no answer in plan" });
+    if (field.required && !filled.has(field.id) && !unplaced.has(field.id)) {
+      unanswered.set(field.id, {
+        fieldId: field.id,
+        label: field.label,
+        outcome: "skipped",
+        error: "no answer in plan",
+      });
     }
   }
-
-  const outcomes = new Map(report.fields.map((f) => [f.fieldId, f.outcome] as const));
-  report.complete = Array.from(fields.values())
-    .filter((f) => f.required)
-    .every((f) => outcomes.get(f.id) === "filled" || outcomes.get(f.id) === "verified");
-
-  return { type: "FILL_REPORT", tabId, report };
+  for (const id of filled) unanswered.delete(id);
 }
 
 /** Route one answer to the right fill strategy for its field kind. */

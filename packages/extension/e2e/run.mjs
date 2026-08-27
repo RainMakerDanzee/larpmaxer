@@ -296,6 +296,30 @@ async function main() {
       async () => (await chrome.storage.local.get("records")).records ?? [],
     );
     check("the application was recorded in history", records.length === 1, `${records.length} record(s)`);
+
+    // --- a page with no evidence of an application ------------------
+    // The first step of a multi-step form shows a couple of name fields and a
+    // Next button: no email, no submit, no resume field. The generic adapter
+    // must refuse it rather than claim it, for the same reason it refuses a
+    // job-board search page — offering someone their own form controls as
+    // interview questions is worse than admitting the page is not fillable.
+    // Next-button pagination is exactly what search results have too, which is
+    // why multi-step support is opt-in per adapter (quirks.paginated) and not
+    // inferred from the page.
+    await job.goto(`${ORIGIN}/paginated.html`, { waitUntil: "domcontentloaded" });
+    await panel.evaluate(() => {
+      window.__seen = [];
+    });
+    await send({ type: "DETECT_REQUEST", tabId });
+    const declined = await await1("DETECT_RESULT");
+    check(
+      "declines a page with no evidence of an application form",
+      declined.adapterId === null,
+      String(declined.adapterId),
+    );
+    const handoff = (await seen("HUMAN_NEEDED"))[0];
+    check("hands that page back to the user", handoff?.reason === "unknown_page", JSON.stringify(handoff ?? null));
+
   } finally {
     await ctx.close();
     server.close();

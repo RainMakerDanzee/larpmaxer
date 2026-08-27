@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Application for Data Analyst at Multi Step Co</title>
+</head>
+<body>
+  <div id="wrapper">
+    <h1>Data Analyst</h1>
+    <div id="application">
+      <h2>Apply for this Job</h2>
+      <form id="application_form" method="post">
+        <!-- Step 1: only these fields exist in the DOM until Next is pressed,
+             which is what makes this a real multi-step form rather than a
+             single page with sections hidden by CSS. -->
+        <div id="step-host"></div>
+        <div id="controls"></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    var STEPS = [
+      '<div class="field"><label for="first_name">First Name *</label>' +
+      '<input type="text" id="first_name" name="first_name" required></div>' +
+      '<div class="field"><label for="last_name">Last Name *</label>' +
+      '<input type="text" id="last_name" name="last_name" required></div>',
+
+      '<div class="field"><label for="email">Email *</label>' +
+      '<input type="email" id="email" name="email" required></div>' +
+      '<div class="field"><label for="phone">Phone</label>' +
+      '<input type="text" id="phone" name="phone"></div>',
+
+      '<div class="field"><label for="why">Why do you want to work here?</label>' +
+      '<textarea id="why" name="why"></textarea></div>' +
+      '<div class="field"><label for="notice">Notice period</label>' +
+      '<input type="text" id="notice" name="notice"></div>'
+    ];
+
+    var step = 0;
+    var host = document.getElementById('step-host');
+    var controls = document.getElementById('controls');
+
+    function render() {
+      host.innerHTML = STEPS[step];
+      // Next on every step but the last; submit only on the last. This is the
+      // shape the executor keys on, and it is how real multi-step ATSs behave.
+      controls.innerHTML = step < STEPS.length - 1
+        ? '<button type="button" id="next">Next</button>'
+        : '<input type="submit" id="submit_app" value="Submit Application">';
+      if (step < STEPS.length - 1) {
+        document.getElementById('next').addEventListener('click', function () {
+          step++;
+          render();
+        });
+      }
+    }
+
+    document.getElementById('application_form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      document.getElementById('application').innerHTML =
+        '<h2>Thank you for applying</h2><p>Your application has been received.</p>';
+    });
+
+    render();
+  </script>
+</body>
+</html>

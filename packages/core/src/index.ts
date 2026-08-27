@@ -13,6 +13,7 @@ export * from "./answers.js";
 export * from "./fill/events.js";
 export * from "./fill/files.js";
 export * from "./fill/dom.js";
+export * from "./fill/pagination.js";
 export * from "./adapters/index.js";
 export * from "./llm/index.js";
 export * from "./messages.js";

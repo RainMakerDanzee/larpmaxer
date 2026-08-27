@@ -52,8 +52,12 @@ npm run build
    left empty. `.docx` and plain text are read directly; for a PDF, paste the text instead.
    The editor maps 1:1 to the `Profile` type, and
    [`examples/profile.example.json`](examples/profile.example.json) shows every field filled in.
-   Add your Anthropic or OpenAI API key under **Settings**.
 4. Visit a Greenhouse, Lever, or Ashby posting and press **Fill**.
+
+No API key is needed. Answering runs on Chrome's own built-in model by default, on your
+machine, for free — open **Settings** once to download it if the panel says it needs to.
+Machines that can't run it lose nothing: those questions come to you instead, and you can
+add an Anthropic or OpenAI key there if you'd rather use one.
 
 ## The rules we won't break
 
@@ -69,9 +73,10 @@ These are product rules, not settings:
 - **Review before submit.** By default nothing is submitted until you approve the full
   filled-form artifact. Auto mode is an explicit opt-in you flip in Settings, and either way
   every run is recorded in History with its per-field fill report.
-- **100% local, BYO API key, zero telemetry.** Profile, Q&A bank, key, and application history
-  live in `chrome.storage.local`. The only network calls are to the LLM provider you
-  configured, with your own key. See [PRIVACY.md](PRIVACY.md).
+- **100% local, zero telemetry.** Profile, Q&A bank, any key, and application history live in
+  `chrome.storage.local`. On the default on-device model there are no LLM network calls at
+  all; choose a cloud provider and the only calls are to that provider, with your own key.
+  See [PRIVACY.md](PRIVACY.md).
 
 ## Supported ATS
 
@@ -115,7 +120,7 @@ plans, and the Preact side panel. Full details, module map, and data flow:
 
 ## Roadmap
 
-- **Workday adapter** — paginated multi-step forms; the reference case for `quirks.paginated`
+- **Workday adapter** — the first user of `quirks.paginated`, which the executor now traverses; needs a captured fixture of the real form
 - **SEEK** and other login-walled boards — human-assisted flow (you log in, LarpMaxer fills)
 - **Batch mode** — queue several postings, answer intake once, review them all in one sitting
 - **Desktop companion** — for the steps a browser extension can't reach

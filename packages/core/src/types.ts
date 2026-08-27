@@ -227,6 +227,14 @@ export interface AdapterQuirks {
   settleMs?: number;
   /** True when the form paginates and needs Next-button traversal. */
   paginated?: boolean;
+  /**
+   * Selector for the control that advances a paginated form.
+   *
+   * Optional: without it the executor scans for an unambiguous forward label.
+   * Supply it whenever the ATS has a stable one — guessing from text is the
+   * fallback, and the cost of guessing wrong is a half-filled submission.
+   */
+  nextSelector?: string;
 }
 
 // ---------------------------------------------------------------------------

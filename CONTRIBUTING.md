@@ -111,7 +111,7 @@ projects. Open an issue to claim one so two people don't build it at once:
 | Teamtailor | `*.teamtailor.com` | Straightforward, a couple of comboboxes to map |
 | BambooHR | `*.bamboohr.com` | Plain fields, good label association |
 | Pinpoint | `*.pinpointhq.com` | Tidy forms, standard uploads |
-| SmartRecruiters | `jobs.smartrecruiters.com` | Well-structured but multi-step — needs `quirks.paginated`, which the executor does not honour yet |
+| SmartRecruiters | `jobs.smartrecruiters.com` | Well-structured but multi-step — needs `quirks.paginated`, which the executor now honours |
 
 Harder, and worth discussing in an issue first: Workday (paginated + account walls, on the
 roadmap), iCIMS (iframe soup), SEEK and other boards that require login (needs the

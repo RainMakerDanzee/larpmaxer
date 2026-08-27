@@ -241,7 +241,8 @@ The full quirk set (from `types.ts`):
 |---|---|---|
 | `trustedKeyboardOnly` | `FieldKind[]` | Values of these kinds only register via the per-keystroke path (Ashby-style React forms) |
 | `settleMs` | `number` | The form validates or normalises asynchronously — wait this long after filling before reading values back |
-| `paginated` | `boolean` | The form spans multiple pages behind Next buttons (Workday-style). Declared in `types.ts` today; the executor will honour it when the roadmap's Workday adapter lands |
+| `paginated` | `boolean` | The form spans multiple steps behind Next buttons (Workday-style). The executor traverses them: it fills the visible step, advances, re-discovers, and stops when no forward control remains. Opt in only when you know the ATS paginates — it is never inferred, because Next-button pagination is also what search-result pages have |
+| `nextSelector` | `string` | Selector for the control that advances a step. Optional: without it the executor scans for an unambiguous forward label, rejecting anything that also reads like submit or back. Supply it when the ATS has a stable one — the cost of guessing wrong is a half-filled submission |
 
 **The honest limit.** A page that hard-checks `event.isTrusted` cannot be satisfied from a
 content script — browsers reserve trusted events for real users, by design, and LarpMaxer does
