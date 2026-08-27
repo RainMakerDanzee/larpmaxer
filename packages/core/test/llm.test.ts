@@ -7,8 +7,10 @@ import {
   chromeAiAvailability,
   chromeAiUsable,
   createChromeAiProvider,
+  downloadOnDeviceModel,
   promptOnDevice,
 } from '../src/llm/chromeAi.js';
+import { resolveAnswers } from "../src/answers.js";
 
 const resumeRef: ResumeRef = {
   id: "r1",
@@ -282,7 +284,132 @@ describe("Chrome built-in AI provider", () => {
       /not available/i,
     );
   });
+
+  // The failure that made keyless mode unusable: with the weights missing,
+  // LanguageModel.create() sits forever — no progress events, no rejection —
+  // so the first LLM field stalled the entire run.
+  describe("a model that never answers", () => {
+    const neverSettles = new Promise<never>(() => {});
+
+    it("refuses fast when the weights are not downloaded, instead of hanging", async () => {
+      let created = false;
+      globalRef.LanguageModel = {
+        availability: async () => "downloadable",
+        create: async () => {
+          created = true;
+          return neverSettles;
+        },
+      };
+      await expect(promptOnDevice([{ role: "user", content: "hi" }])).rejects.toThrow(
+        /one-time download|press Download/i,
+      );
+      // It must not even reach create(): that call is the hang.
+      expect(created).toBe(false);
+    });
+
+    it("says so plainly while the download is still running", async () => {
+      globalRef.LanguageModel = {
+        availability: async () => "downloading",
+        create: async () => neverSettles,
+      };
+      await expect(promptOnDevice([{ role: "user", content: "hi" }])).rejects.toThrow(
+        /still downloading/i,
+      );
+    });
+
+    it("times out a create() that hangs even when the model claims to be ready", async () => {
+      globalRef.LanguageModel = {
+        availability: async () => "available",
+        create: async () => neverSettles,
+      };
+      await expect(
+        promptOnDevice([{ role: "user", content: "hi" }], undefined, { timeoutMs: 30 }),
+      ).rejects.toThrow(/stopped responding while starting/i);
+    });
+
+    it("times out a prompt() that hangs after the session opens", async () => {
+      globalRef.LanguageModel = {
+        availability: async () => "available",
+        create: async () => ({ prompt: async () => neverSettles }),
+      };
+      await expect(
+        promptOnDevice([{ role: "user", content: "hi" }], undefined, { timeoutMs: 30 }),
+      ).rejects.toThrow(/stopped responding while waiting/i);
+    });
+
+    it("reports unavailable when the availability probe itself hangs", async () => {
+      globalRef.LanguageModel = {
+        availability: () => neverSettles,
+        create: async () => neverSettles,
+      };
+      expect(await chromeAiAvailability(30)).toBe("unavailable");
+    });
+
+    it("a hung model costs one question, not the run", async () => {
+      globalRef.LanguageModel = {
+        availability: async () => "downloadable",
+        create: async () => neverSettles,
+      };
+      // This is the contract that matters: resolveAnswers catches the throw and
+      // queues the field for the user, so the fill carries on.
+      const delegate = makeLlmDelegate(createChromeAiProvider());
+      const result = await resolveAnswers([textField], profile, delegate);
+      expect(result.answers).toHaveLength(0);
+      expect(result.needsUser).toHaveLength(1);
+      expect(result.needsUser[0]?.fieldId).toBe(textField.id);
+    });
+  });
+
+  describe("downloadOnDeviceModel", () => {
+    it("reports the availability the download actually produced", async () => {
+      let state = "downloadable";
+      globalRef.LanguageModel = {
+        availability: async () => state,
+        create: async () => {
+          state = "available";
+          return { prompt: async () => "" };
+        },
+      };
+      expect(await downloadOnDeviceModel()).toBe("available");
+    });
+
+    it("reports progress as a 0-1 fraction when the browser sends bytes", async () => {
+      const seen: number[] = [];
+      globalRef.LanguageModel = {
+        availability: async () => "available",
+        create: async (opts?: {
+          monitor?: (m: {
+            addEventListener: (t: string, fn: (e: { loaded: number; total?: number }) => void) => void;
+          }) => void;
+        }) => {
+          opts?.monitor?.({
+            addEventListener: (_t, fn) => {
+              fn({ loaded: 50, total: 100 });
+              fn({ loaded: 0.75 });
+              fn({ loaded: 4000 });
+            },
+          });
+          return { prompt: async () => "" };
+        },
+      };
+      await downloadOnDeviceModel((f) => seen.push(f));
+      expect(seen).toEqual([0.5, 0.75, 1]);
+    });
+
+    it("does not throw when the download hangs; it reports the state instead", async () => {
+      globalRef.LanguageModel = {
+        availability: async () => "downloadable",
+        create: () => neverSettlesFor(),
+      };
+      expect(await downloadOnDeviceModel(undefined, 30)).toBe("downloadable");
+    });
+  });
 });
+
+/** A promise that never settles, as a fresh instance per call. */
+function neverSettlesFor(): Promise<never> {
+  return new Promise<never>(() => {});
+}
 
 describe("httpError", () => {
   it("maps 401 to a check-your-API-key message with the API detail", async () => {

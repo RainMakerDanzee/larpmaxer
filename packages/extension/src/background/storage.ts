@@ -24,13 +24,31 @@ import type {
 export interface Settings {
   /** "review" (default) gates every submit; "auto" is an explicit opt-in. */
   autonomy: AutonomyMode;
-  /** BYO LLM provider; unset means answer resolution stops at the Q&A bank. */
+  /**
+   * The chosen provider. Unset means the on-device default, not "off" — see
+   * {@link getSettings}. A cloud provider is inert without `apiKey`.
+   */
   llm?: LlmConfig;
+  /**
+   * Explicitly answer without any model. Only an unset `llm` plus this flag
+   * means off; it exists so "no key" no longer has to double as "no LLM",
+   * now that a keyless provider is the default.
+   */
+  llmOff?: boolean;
   /** Save per-application artifacts + ledger.xlsx to Downloads/LarpMaxer (default on). */
   saveArtifacts?: boolean;
   /** Create portal accounts autonomously after one consent per site (default on). */
   autoRegister?: boolean;
 }
+
+/**
+ * The keyless default: Chrome's own on-device model.
+ *
+ * `apiKey` and `model` are inert for this provider — the browser ships the
+ * weights and picks the model — but the shape is shared with the cloud
+ * providers, so they are present and empty.
+ */
+const ON_DEVICE: LlmConfig = { provider: "chrome", apiKey: "", model: "" };
 
 const KEY_PROFILE = "profile";
 const KEY_SETTINGS = "settings";
@@ -54,9 +72,23 @@ export async function setProfile(profile: Profile): Promise<void> {
   await chrome.storage.local.set({ [KEY_PROFILE]: profile });
 }
 
-/** Load settings; defaults to review mode (the approval gate) when unset. */
+/**
+ * Load settings; defaults to review mode (the approval gate) when unset.
+ *
+ * A user who never opens Settings still gets a working model: with no stored
+ * choice, answering runs on the browser's own on-device model, which needs no
+ * key and no account. Only `llmOff` turns that off.
+ */
 export async function getSettings(): Promise<Settings> {
-  return { autonomy: "review", saveArtifacts: true, autoRegister: true, ...(await read<Settings>(KEY_SETTINGS)) };
+  const stored = await read<Settings>(KEY_SETTINGS);
+  const settings: Settings = {
+    autonomy: "review",
+    saveArtifacts: true,
+    autoRegister: true,
+    ...stored,
+  };
+  if (settings.llm === undefined && settings.llmOff !== true) settings.llm = ON_DEVICE;
+  return settings;
 }
 
 /** Persist settings, including the local-only LLM API key. */

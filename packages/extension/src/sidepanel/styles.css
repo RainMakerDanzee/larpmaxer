@@ -638,6 +638,25 @@ table.kv {
 
 /* ---- Loader / empty flourishes ------------------------------------------------ */
 
+/* One-time model download: a recessed track with a lime fill, matching the
+   elevation system (inputs are carved in, so a progress track is too). */
+.bar {
+  display: block;
+  margin-top: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hairline-2);
+  box-shadow: var(--edge-inset);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--lime);
+  transition: width var(--t-med) var(--ease);
+}
+
 .spark {
   display: inline-block;
   color: var(--lime);

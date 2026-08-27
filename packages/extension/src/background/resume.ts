@@ -24,7 +24,9 @@ export async function handleRefineRequest(
 ): Promise<void> {
   const { llm } = await getSettings();
   if (llm === undefined) {
-    await reply(msg.parsed, false, "No model configured — add one in Settings to improve the read.");
+    // Only reachable when the user chose "no model" in Settings; otherwise the
+    // keyless on-device provider is the default.
+    await reply(msg.parsed, false, "Answering without a model, as you asked — this is the rule-based read.");
     return;
   }
 

@@ -13,9 +13,12 @@ export { createOpenAiProvider } from "./openai.js";
 export {
   createChromeAiProvider,
   chromeAiAvailability,
+  chromeAiReady,
   chromeAiUsable,
+  downloadOnDeviceModel,
   promptOnDevice,
   type ChromeAiAvailability,
+  type OnDeviceOptions,
 } from "./chromeAi.js";
 export * from "./prompts.js";
 export { makeLlmDelegate, type DelegateAnswer } from "./answerDelegate.js";

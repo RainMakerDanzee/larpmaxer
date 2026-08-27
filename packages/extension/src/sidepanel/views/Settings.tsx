@@ -1,33 +1,40 @@
 import { useEffect, useState } from "preact/hooks";
-import { chromeAiAvailability, DEFAULT_MODELS } from "@larpmaxer/core";
+import {
+  chromeAiAvailability,
+  downloadOnDeviceModel,
+  DEFAULT_MODELS,
+  type ChromeAiAvailability,
+} from "@larpmaxer/core";
 import type { AutonomyMode, LlmConfig, LlmProvider } from "@larpmaxer/core";
 import { getSettings, setSettings, type Settings } from "../../background/storage";
 
-const PROVIDERS: readonly LlmProvider["id"][] = ["chrome", "anthropic", "openai"];
-const PROVIDER_LABELS: Record<LlmProvider["id"], string> = {
+/** "off" is a real choice now that the default provider needs no key. */
+type ProviderChoice = LlmProvider["id"] | "off";
+
+const PROVIDERS: readonly ProviderChoice[] = ["chrome", "anthropic", "openai", "off"];
+const PROVIDER_LABELS: Record<ProviderChoice, string> = {
   chrome: "Chrome built-in AI (no key needed)",
   anthropic: "Anthropic",
   openai: "OpenAI",
+  off: "No model — I'll answer everything myself",
 };
 
-const defaultModel = (p: LlmProvider["id"]): string => DEFAULT_MODELS[p];
+/** What each availability state means, in the user's terms. */
+const AI_STATE_TEXT: Record<ChromeAiAvailability, string> = {
+  available: "Ready — running on your device, no key needed.",
+  downloadable: "Supported by this machine. The model needs a one-time download before it can answer.",
+  downloading: "Downloading now. This tab can be closed; it continues in the background.",
+  unavailable:
+    "Not available on this device. Questions it would have answered come to you instead, or add an API key below.",
+};
+
+const defaultModel = (p: ProviderChoice): string => (p === "off" ? "" : DEFAULT_MODELS[p]);
 
 // The Message union has no key-test type, so the probe calls the provider
 // directly from the panel. Needs host permissions for both API origins.
+// The on-device model has no key to test — its state comes from
+// chromeAiAvailability instead.
 async function probeKey(cfg: LlmConfig): Promise<string> {
-  if (cfg.provider === "chrome") {
-    const state = await chromeAiAvailability();
-    switch (state) {
-      case "available":
-        return "Ready — running on your device, no key needed.";
-      case "downloadable":
-        return "Supported. The model downloads on first use (a few hundred MB, once).";
-      case "downloading":
-        return "The model is downloading now — try again shortly.";
-      default:
-        return "Not available on this device. Add an API key below, or leave the LLM off and answer questions yourself.";
-    }
-  }
   try {
     if (cfg.provider === "anthropic") {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -96,8 +103,13 @@ function VibeStamp() {
 
 /** Settings tab: autonomy mode, LLM provider/model, and a locally stored API key. */
 export function SettingsView() {
-  const [provider, setProvider] = useState<LlmProvider["id"]>("anthropic");
-  const [model, setModel] = useState<string>(() => defaultModel("anthropic"));
+  // The on-device model is the default: it is the only one that works with no
+  // setup at all, which is the point of shipping with it.
+  const [provider, setProvider] = useState<ProviderChoice>("chrome");
+  const [model, setModel] = useState<string>(() => defaultModel("chrome"));
+  const [aiState, setAiState] = useState<ChromeAiAvailability | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [apiKey, setApiKey] = useState("");
   const [autonomy, setAutonomy] = useState<AutonomyMode>("review");
   const [saveArtifacts, setSaveArtifacts] = useState(true);
@@ -112,7 +124,9 @@ export function SettingsView() {
       setAutonomy(s.autonomy);
       setSaveArtifacts(s.saveArtifacts !== false);
       setAutoRegister(s.autoRegister !== false);
-      if (s.llm) {
+      if (s.llmOff === true) {
+        setProvider("off");
+      } else if (s.llm) {
         setProvider(s.llm.provider);
         setModel(s.llm.model);
         setApiKey(s.llm.apiKey);
@@ -120,32 +134,76 @@ export function SettingsView() {
     });
   }, []);
 
-  const onProvider = (next: LlmProvider["id"]): void => {
+  // Probe on open so the on-device state is visible without pressing anything.
+  // The probe has its own deadline, so a wedged API cannot stall this tab.
+  useEffect(() => {
+    if (provider !== "chrome") return;
+    void chromeAiAvailability().then(setAiState);
+  }, [provider]);
+
+  /**
+   * Fetch the weights, driven by this click.
+   *
+   * It runs in the panel rather than the background worker on purpose: it
+   * needs a user gesture, it is the browser's own model rather than a keyed
+   * provider, and the progress has somewhere to be shown.
+   */
+  const download = async (): Promise<void> => {
+    setDownloading(true);
+    setProgress(0);
+    setTestMsg("");
+    const state = await downloadOnDeviceModel(setProgress);
+    setAiState(state);
+    setDownloading(false);
+    setTestMsg(
+      state === "available"
+        ? "Downloaded. LarpMaxer will answer with the on-device model from now on."
+        : `Download did not complete — ${AI_STATE_TEXT[state]}`,
+    );
+  };
+
+  const onProvider = (next: ProviderChoice): void => {
     // Only replace the model if the user never customised it.
     if (model.trim() === "" || model === defaultModel(provider)) {
       setModel(defaultModel(next));
     }
     setProvider(next);
+    setTestMsg("");
   };
 
   const save = async (): Promise<void> => {
-    // No key means LLM answering stays off (Settings.llm unset by contract).
-    // The on-device provider is configured by choosing it; every other
-    // provider is inert without a key, so an empty key means "LLM off".
-    const usable = provider === "chrome" || apiKey.trim() !== "";
-    const next: Settings = usable
-      ? { autonomy, saveArtifacts, autoRegister, llm: { provider, apiKey, model } }
-      : { autonomy, saveArtifacts, autoRegister };
+    const base = { autonomy, saveArtifacts, autoRegister };
+    // "off" is now the only way to have no model: an empty key no longer
+    // doubles as one, because the default provider never needed a key.
+    // A cloud provider without a key is inert, so it falls back to on-device
+    // rather than silently answering nothing.
+    const next: Settings =
+      provider === "off"
+        ? { ...base, llmOff: true }
+        : provider === "chrome" || apiKey.trim() !== ""
+          ? { ...base, llm: { provider, apiKey, model } }
+          : { ...base, llm: { provider: "chrome", apiKey: "", model: "" } };
     await setSettings(next);
-    setFlash("Saved");
-    window.setTimeout(() => setFlash(""), 1500);
+    setFlash(
+      provider !== "off" && provider !== "chrome" && apiKey.trim() === ""
+        ? "Saved — no key, so the on-device model is used"
+        : "Saved",
+    );
+    window.setTimeout(() => setFlash(""), 2500);
   };
 
   const test = async (): Promise<void> => {
+    if (provider === "off") return;
     setTesting(true);
     setTestMsg("");
-    const probeModel = model.trim() === "" ? defaultModel(provider) : model;
-    setTestMsg(await probeKey({ provider, apiKey, model: probeModel }));
+    if (provider === "chrome") {
+      const state = await chromeAiAvailability();
+      setAiState(state);
+      setTestMsg(AI_STATE_TEXT[state]);
+    } else {
+      const probeModel = model.trim() === "" ? defaultModel(provider) : model;
+      setTestMsg(await probeKey({ provider, apiKey, model: probeModel }));
+    }
     setTesting(false);
   };
 
@@ -214,7 +272,34 @@ export function SettingsView() {
           ))}
         </select>
       </label>
-      {provider !== "chrome" && (
+      {provider === "chrome" && (
+        <div class={aiState === "unavailable" ? "card" : "card intake"}>
+          <strong class="card-title">On-device model</strong>
+          <p class="small">{aiState === null ? "Checking this device..." : AI_STATE_TEXT[aiState]}</p>
+          {downloading && (
+            <p class="small">
+              Downloading... {Math.round(progress * 100)}%
+              <span class="bar" aria-hidden="true">
+                <span class="bar-fill" style={`width:${Math.round(progress * 100)}%`} />
+              </span>
+            </p>
+          )}
+          {(aiState === "downloadable" || aiState === "downloading") && (
+            <div class="row">
+              <button class="btn primary" disabled={downloading} onClick={() => void download()}>
+                {downloading ? "Downloading..." : "Download the model"}
+              </button>
+            </div>
+          )}
+          {aiState === "unavailable" && (
+            <p class="muted small">
+              Nothing is broken — LarpMaxer still fills everything it can read from your profile,
+              and asks you the rest instead of guessing.
+            </p>
+          )}
+        </div>
+      )}
+      {provider !== "chrome" && provider !== "off" && (
       <label class="field">
         <span>Model</span>
         <input
@@ -225,7 +310,7 @@ export function SettingsView() {
         />
       </label>
       )}
-      {provider !== "chrome" && (
+      {provider !== "chrome" && provider !== "off" && (
       <label class="field">
         <span>API key</span>
         <input
@@ -239,21 +324,25 @@ export function SettingsView() {
       )}
       <p class="muted small">
         {provider === "chrome"
-          ? "Runs on your machine using the model built into Chrome. No key, no account, no cost — and nothing leaves your device. Not every machine can run it; test below."
-          : "Stays in this browser, sent only to your chosen provider. Empty = LLM answering off."}
+          ? "Runs on your machine using the model built into Chrome. No key, no account, no cost — and nothing leaves your device."
+          : provider === "off"
+            ? "Every question LarpMaxer cannot answer from your profile or your saved answers comes to you. Nothing is sent to any model."
+            : "Stays in this browser, sent only to your chosen provider. Leave it empty to fall back to the on-device model."}
       </p>
 
       <div class="row">
         <button class="btn primary" onClick={() => void save()}>
           Save settings
         </button>
-        <button
-          class="btn"
-          disabled={(provider !== "chrome" && apiKey.trim() === "") || testing}
-          onClick={() => void test()}
-        >
-          {testing ? "Checking..." : provider === "chrome" ? "Check availability" : "Test key"}
-        </button>
+        {provider !== "off" && (
+          <button
+            class="btn"
+            disabled={(provider !== "chrome" && apiKey.trim() === "") || testing}
+            onClick={() => void test()}
+          >
+            {testing ? "Checking..." : provider === "chrome" ? "Re-check" : "Test key"}
+          </button>
+        )}
         {flash !== "" && <span class="flash">{flash}</span>}
       </div>
       {testMsg !== "" && (
