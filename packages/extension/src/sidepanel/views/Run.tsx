@@ -8,6 +8,7 @@ import type {
   QueuedJob,
   ResolvedAnswer,
 } from "@larpmaxer/core";
+import { byFreshness, isStale, relativeAge, STALE_DAYS } from "@larpmaxer/core";
 import { sendToRuntime } from "../../lib/messaging";
 
 /** Detection summary from the latest DETECT_RESULT for the current tab. */
@@ -75,6 +76,12 @@ function LinkQueue(props: { queue: QueuedJob[] }) {
   const [url, setUrl] = useState("");
   const [err, setErr] = useState("");
 
+  // One timestamp per render so no two cards disagree about "now". Newest
+  // first, with anything long-stale sunk to the bottom rather than deleted —
+  // the user put it there deliberately.
+  const now = Date.now();
+  const ordered = byFreshness(props.queue, (j) => j.addedAt, now);
+
   const add = async (): Promise<void> => {
     let origin: string;
     try {
@@ -115,14 +122,23 @@ function LinkQueue(props: { queue: QueuedJob[] }) {
       {err !== "" && <p class="muted small">{err}</p>}
       {props.queue.length > 0 && (
         <div class="stack">
-          {props.queue.map((j) => (
-            <div key={j.id} class={`card queue-card status-${j.status}`}>
+          {ordered.map((j) => (
+            <div
+              key={j.id}
+              class={`card queue-card status-${j.status}${isStale(j.addedAt, now) ? " stale" : ""}`}
+            >
               <div class="row">
                 <span class={`status-dot status-${j.status}`} aria-hidden="true" />
                 <span class="queue-status">{STATUS_LABEL[j.status]}</span>
                 <span class="queue-host muted small">{hostOf(j.url)}</span>
               </div>
               <div class="card-title">{j.jobTitle ?? j.url.replace(/^https:\/\//, "").slice(0, 60)}</div>
+              <p class="muted small">
+                Added {relativeAge(j.addedAt, now)}
+                {isStale(j.addedAt, now)
+                  ? ` — over ${STALE_DAYS} days old, so it may already be filled`
+                  : ""}
+              </p>
               {j.note !== undefined && <p class="muted small">{j.note}</p>}
               <div class="row">
                 {j.tabId !== undefined && (

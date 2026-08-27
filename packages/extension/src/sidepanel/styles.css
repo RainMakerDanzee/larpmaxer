@@ -308,6 +308,31 @@ body {
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Time-window filter. A pressed chip is filled, so the current window is
+   readable at a glance rather than by comparing borders. */
+.btn.chip {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 999px;
+}
+
+.btn.chip.on {
+  background: var(--lime);
+  border-color: var(--lime);
+  color: var(--lime-ink);
+}
+
+/* A queue entry old enough that the posting has probably closed. Dimmed and
+   sunk, never hidden: the user put it there on purpose. */
+.card.queue-card.stale {
+  opacity: 0.62;
+  border-left-color: var(--edge-neutral);
+}
+
+.card.queue-card.stale:hover {
+  opacity: 1;
+}
+
 /* Where a value came from. Quiet by design: it is there to be checked when
    something looks wrong, not to compete with the value itself. */
 .src {

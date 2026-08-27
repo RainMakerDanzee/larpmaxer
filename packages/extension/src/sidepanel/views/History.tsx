@@ -1,6 +1,14 @@
 import { useEffect, useState } from "preact/hooks";
-import type { ApplicationRecord } from "@larpmaxer/core";
-import { buildLedgerXlsx, ledgerRowsFromRecords } from "@larpmaxer/core";
+import type { ApplicationRecord, DateWindow } from "@larpmaxer/core";
+import {
+  buildLedgerXlsx,
+  isWithin,
+  ledgerRowsFromRecords,
+  relativeAge,
+  WINDOW_LABEL,
+} from "@larpmaxer/core";
+
+const WINDOWS: readonly DateWindow[] = ["24h", "7d", "30d", "all"];
 import { getRecords } from "../../background/storage";
 
 // Mirrors KEY_RECORDS in background/storage.ts; storage change events carry raw keys.
@@ -17,6 +25,9 @@ function hostOf(url: string): string {
 /** History tab: every stored ApplicationRecord, live-updated, newest first. */
 export function HistoryView() {
   const [records, setRecords] = useState<ApplicationRecord[] | null>(null);
+  const [range, setRange] = useState<DateWindow>("all");
+  // One timestamp for the whole render, so rows cannot disagree about "now".
+  const now = Date.now();
 
   useEffect(() => {
     void getRecords().then(setRecords);
@@ -54,15 +65,35 @@ export function HistoryView() {
   const sorted = [...records].sort((a, b) =>
     (b.submittedAt ?? "9999").localeCompare(a.submittedAt ?? "9999"),
   );
+  const shown = sorted.filter((r) => isWithin(r.submittedAt, range, now));
 
   return (
     <div class="stack">
+      <div class="row">
+        {WINDOWS.map((w) => (
+          <button
+            key={w}
+            class={w === range ? "btn chip on" : "btn chip"}
+            aria-pressed={w === range}
+            onClick={() => setRange(w)}
+          >
+            {WINDOW_LABEL[w]}
+          </button>
+        ))}
+      </div>
+      <p class="muted small">
+        {shown.length} of {records.length} application{records.length === 1 ? "" : "s"}
+        {range === "all" ? "" : ` in the last ${WINDOW_LABEL[range].toLowerCase()}`}.
+      </p>
       <div class="row">
         <button class="btn" onClick={downloadLedger}>
           Download ledger (.xlsx)
         </button>
       </div>
-      {sorted.map((r) => (
+      {shown.length === 0 && (
+        <p class="muted small">Nothing in this window — try a wider one.</p>
+      )}
+      {shown.map((r) => (
         <div key={r.id} class="history-item">
           <div class="row">
             <strong>{r.company ?? hostOf(r.url)}</strong>
@@ -71,7 +102,9 @@ export function HistoryView() {
           {r.jobTitle && <div class="small">{r.jobTitle}</div>}
           <div class="row small muted">
             {r.submittedAt && (
-              <span>Submitted {new Date(r.submittedAt).toLocaleString()}</span>
+              <span title={new Date(r.submittedAt).toLocaleString()}>
+                Submitted {relativeAge(r.submittedAt, now)}
+              </span>
             )}
             <a href={r.url} target="_blank" rel="noreferrer">
               {hostOf(r.url)}
