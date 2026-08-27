@@ -6,6 +6,7 @@ import type {
   Message,
   OpenQuestion,
   QueuedJob,
+  ResolvedAnswer,
 } from "@larpmaxer/core";
 import { sendToRuntime } from "../../lib/messaging";
 
@@ -35,6 +36,28 @@ export interface RunProps {
   /** Clears the human-needed card once the user clicks Continue. */
   onHumanDone: () => void;
 }
+
+/**
+ * Where an answer came from, in the user's words.
+ *
+ * The product's central claim is that every answer traces to something the
+ * user owns. The review card is where that claim is checked, so it says the
+ * provenance of each value rather than asking anyone to take it on trust.
+ */
+const SOURCE_LABEL: Record<ResolvedAnswer["source"], string> = {
+  profile: "from your profile",
+  qa_bank: "from your saved answers",
+  llm: "drafted from your profile",
+  user: "you typed",
+};
+
+/** Short form for the per-row chip, where space is tight. */
+const SOURCE_SHORT: Record<ResolvedAnswer["source"], string> = {
+  profile: "profile",
+  qa_bank: "saved",
+  llm: "drafted",
+  user: "typed",
+};
 
 const STATUS_LABEL: Record<QueuedJob["status"], string> = {
   queued: "Queued",
@@ -202,6 +225,16 @@ function IntakeCard(props: {
 export function RunView(props: RunProps) {
   const [answered, setAnswered] = useState<ReadonlySet<string>>(new Set());
   const [dismissed, setDismissed] = useState(false);
+  /**
+   * Field ids this form asked about that the run could not answer itself,
+   * keyed by the form they belong to. Keyed rather than reset on the run id,
+   * because the id arrives after the plan does — resetting on it wiped the
+   * tally the instant the run announced itself.
+   */
+  const [asked, setAsked] = useState<{ url: string; ids: ReadonlySet<string> }>({
+    url: "",
+    ids: new Set(),
+  });
 
   async function scan(): Promise<void> {
     const id = await activeTabId();
@@ -235,6 +268,19 @@ export function RunView(props: RunProps) {
     setAnswered(new Set());
   }, [props.plan]);
 
+  // Every question this form asked that the run could not answer. It has to
+  // accumulate: the background removes each one from needsUser as it is
+  // answered, so the live list is not what the run actually learned.
+  useEffect(() => {
+    const plan = props.plan;
+    if (plan === null) return;
+    setAsked((prev) => {
+      const ids = new Set(prev.url === plan.url ? prev.ids : []);
+      for (const q of plan.needsUser) ids.add(q.fieldId);
+      return { url: plan.url, ids };
+    });
+  }, [props.plan]);
+
   // A new run or phase change voids any local review dismissal.
   useEffect(() => {
     setDismissed(false);
@@ -257,18 +303,41 @@ export function RunView(props: RunProps) {
   };
 
   const report = props.report ?? props.record?.report ?? null;
+  const askedCount = asked.ids.size;
   const showReview = props.record?.phase === "review" && !dismissed;
-  const reviewRows: { label: string; value: string }[] = report
+  // The report knows what landed on the page; the plan knows where each value
+  // came from. Neither alone can answer "is this true?", so they are joined.
+  const sourceOf = new Map(
+    (props.plan?.answers ?? []).map((a) => [a.fieldId, a.source] as const),
+  );
+  const reviewRows: {
+    label: string;
+    value: string;
+    source?: ResolvedAnswer["source"];
+  }[] = report
     ? report.fields.map((f) => ({
         label: f.label,
         value:
           f.finalValue ??
           (f.error !== undefined ? `${f.outcome}: ${f.error}` : f.outcome),
+        ...(sourceOf.has(f.fieldId) ? { source: sourceOf.get(f.fieldId)! } : {}),
       }))
     : (props.plan?.answers ?? []).map((a) => ({
         label: a.fieldId,
         value: String(a.value),
+        source: a.source,
       }));
+
+  // One line of provenance for the whole form, so the common case needs no
+  // row-by-row reading.
+  const bySource = new Map<ResolvedAnswer["source"], number>();
+  for (const row of reviewRows) {
+    if (row.source === undefined) continue;
+    bySource.set(row.source, (bySource.get(row.source) ?? 0) + 1);
+  }
+  const provenance = [...bySource.entries()]
+    .map(([source, n]) => `${n} ${SOURCE_LABEL[source]}`)
+    .join(", ");
   const resume = props.plan?.answers.find((a) => a.resume !== undefined)?.resume;
   const submit = props.record?.submit;
 
@@ -378,18 +447,31 @@ export function RunView(props: RunProps) {
               Resume: <strong>{resume.filename}</strong>
             </p>
           )}
+          {provenance !== "" && <p class="small">Every value: {provenance}.</p>}
           <div class="table-wrap">
             <table class="kv">
               <tbody>
                 {reviewRows.map((r, i) => (
                   <tr key={i}>
                     <th>{r.label}</th>
-                    <td>{r.value}</td>
+                    <td>
+                      {r.value}
+                      {r.source !== undefined && (
+                        <span class="src">{SOURCE_SHORT[r.source]}</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {askedCount > 0 && (
+            <p class="muted small">
+              Learned {askedCount} new question{askedCount === 1 ? "" : "s"} on this form. They
+              are in your Q&amp;A bank under Profile — answer them once and the next form that
+              asks fills itself.
+            </p>
+          )}
           <div class="row">
             <button class="btn primary" onClick={() => void approve()}>
               Approve &amp; Submit

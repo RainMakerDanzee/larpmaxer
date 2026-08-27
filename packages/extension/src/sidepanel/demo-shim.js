@@ -106,6 +106,9 @@
   };
 
   // ---- scripted background ------------------------------------------------
+  /** The demo run's plan, mutated by intake answers like the real one. */
+  var plan = null;
+
   function handle(msg) {
     switch (msg.type) {
       case "QUEUE_STATE":
@@ -172,21 +175,24 @@
       case "DETECT_REQUEST":
         emit({ type: "DETECT_RESULT", tabId: 1, adapterId: "greenhouse", jobTitle: "Senior Data Analyst (demo page)" });
         setTimeout(() => {
-          emit({
-            type: "PLAN_READY",
-            plan: {
-              adapterId: "greenhouse",
-              url: "https://boards.greenhouse.io/demo/jobs/123",
-              answers: [
-                { fieldId: "name", value: "Riley Park", source: "profile" },
-                { fieldId: "email", value: "riley.park@example.com", source: "profile" },
-              ],
-              needsUser: [
-                { fieldId: "salary", label: "What are your salary expectations?", reason: "Not in your profile.", options: undefined },
-                { fieldId: "start", label: "Earliest start date?", reason: "Not in your profile.", options: ["Immediately", "2 weeks", "1 month"] },
-              ],
-            },
-          });
+          // Sources vary on purpose: the review card reports where every value
+          // came from, and a demo where everything says "profile" would not
+          // show that.
+          plan = {
+            adapterId: "greenhouse",
+            url: "https://boards.greenhouse.io/demo/jobs/123",
+            answers: [
+              { fieldId: "name", value: "Riley Park", source: "profile" },
+              { fieldId: "email", value: "riley.park@example.com", source: "profile" },
+              { fieldId: "sponsorship", value: "No", source: "qa_bank" },
+              { fieldId: "why", value: "Your reporting stack is the problem I like solving.", source: "llm" },
+            ],
+            needsUser: [
+              { fieldId: "salary", label: "What are your salary expectations?", reason: "Not in your profile.", options: undefined },
+              { fieldId: "start", label: "Earliest start date?", reason: "Not in your profile.", options: ["Immediately", "2 weeks", "1 month"] },
+            ],
+          };
+          emit({ type: "PLAN_READY", plan: plan });
           emit({ type: "RUN_STATE", record: { id: "demo", url: "https://boards.greenhouse.io/demo/jobs/123", adapterId: "greenhouse", phase: "awaiting_user" } });
         }, 700);
         break;
@@ -208,9 +214,20 @@
         });
         break;
 
-      case "INTAKE_ANSWER":
-        emit({ type: "RUN_STATE", record: { id: "demo", url: "https://x", adapterId: "greenhouse", phase: "review" } });
+      case "INTAKE_ANSWER": {
+        if (plan) {
+          var asked = plan.needsUser.find(function (q) { return q.fieldId === msg.fieldId; });
+          plan.needsUser = plan.needsUser.filter(function (q) { return q.fieldId !== msg.fieldId; });
+          plan.answers = plan.answers.concat([
+            { fieldId: msg.fieldId, value: msg.value, source: "user", label: asked && asked.label },
+          ]);
+          emit({ type: "PLAN_READY", plan: plan });
+        }
+        if (!plan || plan.needsUser.length === 0) {
+          emit({ type: "RUN_STATE", record: { id: "demo", url: "https://x", adapterId: "greenhouse", phase: "review" } });
+        }
         break;
+      }
 
       case "EXECUTE_PLAN":
         emit({ type: "RUN_STATE", record: { id: "demo", url: "https://x", adapterId: "greenhouse", phase: "filling" } });

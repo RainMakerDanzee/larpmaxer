@@ -308,6 +308,25 @@ body {
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Where a value came from. Quiet by design: it is there to be checked when
+   something looks wrong, not to compete with the value itself. */
+.src {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font: 500 10px/1.6 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: var(--hairline-2);
+  color: var(--ink-3);
+}
+
+.card.review .src {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+}
+
 .card.review .btn {
   background: transparent;
   border-color: rgba(255, 255, 255, 0.25);
