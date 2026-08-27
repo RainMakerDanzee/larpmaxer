@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LarpMaxer — design preview</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .preview-note { text-align: center; margin: 10px 0 0;
+    font: 500 11px/1 var(--font-mono); text-transform: uppercase;
+    letter-spacing: .08em; color: var(--ink-3); }
+</style>
+</head>
+<body>
+<p class="preview-note">Design preview · real UI runs in the side panel</p>
+<div class="app">
+  <nav class="tabs" role="tablist">
+    <button class="tab active">Run</button>
+    <button class="tab">Profile</button>
+    <button class="tab">History</button>
+    <button class="tab">Settings</button>
+  </nav>
+  <div class="view">
+    <p class="display">Apply to <strong>anything</strong><em>.</em></p>
+    <div class="row link-row">
+      <input type="url" placeholder="Paste a job link">
+      <button class="btn primary">Apply</button>
+    </div>
+    <div class="card queue-card status-running">
+      <div class="row"><span class="status-dot status-running"></span><span class="queue-status">Filling</span><span class="queue-host muted small">boards.greenhouse.io</span></div>
+      <div class="card-title">Product Analyst — Canva</div>
+    </div>
+    <div class="card queue-card status-review">
+      <div class="row"><span class="status-dot status-review"></span><span class="queue-status">Review ready</span><span class="queue-host muted small">jobs.lever.co</span></div>
+      <div class="card-title">Data Analyst — Atlassian</div>
+      <div class="row"><button class="btn">Open tab</button><button class="btn">Remove</button></div>
+    </div>
+    <div class="card queue-card status-sent">
+      <div class="row"><span class="status-dot status-sent"></span><span class="queue-status">Sent</span><span class="queue-host muted small">jobs.ashbyhq.com</span></div>
+      <div class="card-title">AI Deployment Strategist — Relevance AI</div>
+    </div>
+
+    <section class="card human">
+      <div class="card-title">Your turn</div>
+      <p class="small">Log in to <strong>seek.com.au</strong> in this tab, then continue.</p>
+      <div class="row"><button class="btn primary">I've logged in — continue</button></div>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <div class="card-title">This tab</div>
+        <span class="badge phase-review">review</span>
+      </div>
+      <p class="small">Fillable: <strong>greenhouse</strong> — AI Solutions Specialist</p>
+      <div class="row">
+        <button class="btn">Scan page</button>
+        <button class="btn primary">Fill</button>
+      </div>
+      <p class="muted small">14 fields ready.</p>
+    </section>
+
+    <h2>Needs you (1)</h2>
+    <section class="card">
+      <div class="card-title">Expected salary?</div>
+      <p class="muted small">Not in your profile.</p>
+      <input type="text" placeholder="Your answer">
+      <label class="check"><input type="checkbox" checked> Remember this answer</label>
+      <div class="row"><button class="btn primary">Answer</button></div>
+    </section>
+
+    <section class="card review">
+      <div class="card-title">Review before submit</div>
+      <p class="small">Resume: <strong>Jordan_Diaz_CV.pdf</strong></p>
+      <div class="table-wrap"><table class="kv"><tbody>
+        <tr><th>Full name</th><td>Jordan Diaz</td></tr>
+        <tr><th>Email</th><td>jordan@example.com</td></tr>
+        <tr><th>Location</th><td>Sydney, New South Wales, Australia</td></tr>
+        <tr><th>Sponsorship</th><td>No</td></tr>
+      </tbody></table></div>
+      <div class="row">
+        <button class="btn primary">Approve &amp; Submit</button>
+        <button class="btn">Cancel</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row"><div class="card-title">Submitted</div>
+      <span class="badge phase-done">done</span></div>
+      <p class="muted small">"Your application was successfully submitted."</p>
+    </section>
+
+    <p class="display">Nothing sent <strong>yet</strong><em>.</em> <span class="spark">✦</span></p>
+  </div>
+</div>
+</body>
+</html>

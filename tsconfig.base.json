@@ -1,0 +1,24 @@
+{
+  // Shared compiler options. Each package extends this; none is built for emit —
+  // esbuild bundles the extension and @larpmaxer/core ships as source for v1.
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    // Relative to this file (repo root) — TS 5 resolves paths against the
+    // config that declares them when baseUrl is unset.
+    "paths": {
+      "@larpmaxer/core": ["./packages/core/src/index.ts"]
+    }
+  }
+}

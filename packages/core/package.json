@@ -1,0 +1,15 @@
+{
+  "name": "@larpmaxer/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LarpMaxer engine: detect, discover, answer, fill, verify. Zero runtime dependencies. Source-first for v1 — the package exports ./src/index.ts directly; no compile step.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "echo @larpmaxer/core is source-first for v1 - types only, no build step",
+    "test": "vitest run -c ../../vitest.config.ts"
+  }
+}
