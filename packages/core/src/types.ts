@@ -5,6 +5,10 @@
  * Design rule: no DOM types here — types must be usable in Node (tests, CLIs).
  */
 
+// The message protocol carries a resume parse, whose shape resume/extract.ts
+// owns. Type-only, so this import is erased and forms no runtime cycle.
+import type { ParsedResume } from "./resume/extract.js";
+
 // ---------------------------------------------------------------------------
 // Profile — everything LarpMaxer is allowed to say about the user.
 // ---------------------------------------------------------------------------
@@ -354,7 +358,17 @@ export type Message =
   | { type: "REGISTER_RESULT"; tabId: number; ok: boolean; evidence: string }
   | { type: "QUEUE_LINK"; url: string }
   | { type: "QUEUE_REMOVE"; jobId: string }
-  | { type: "QUEUE_STATE"; jobs: QueuedJob[] };
+  | { type: "QUEUE_STATE"; jobs: QueuedJob[] }
+  | { type: "REFINE_RESUME_REQUEST"; parsed: ParsedResume }
+  | {
+      type: "REFINE_RESUME_RESULT";
+      /** The refined parse, or the one sent in when refinement did not happen. */
+      parsed: ParsedResume;
+      /** False when no provider is configured or the attempt failed. */
+      refined: boolean;
+      /** Why refinement was skipped; unset on success. */
+      note?: string;
+    };
 
 /** Narrow a Message by type with full inference. */
 export function isMessage<T extends Message["type"]>(

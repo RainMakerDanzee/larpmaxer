@@ -15,6 +15,7 @@ import {
   setProfile as persistProfile,
   storeResumeBytes,
 } from "../../background/storage";
+import { onMessage, sendToRuntime } from "../../lib/messaging";
 
 /** A resume that has been read but not yet merged — the user confirms first. */
 interface PendingImport {
@@ -74,6 +75,9 @@ export function ProfileView() {
   const [importNote, setImportNote] = useState("");
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  // The LLM pass runs in the background worker and answers asynchronously.
+  const [refining, setRefining] = useState(false);
+  const [refineNote, setRefineNote] = useState("");
 
   useEffect(() => {
     void getProfile().then((stored) => {
@@ -82,6 +86,22 @@ export function ProfileView() {
       setSkillsText(p.skills.join(", "));
     });
   }, []);
+
+  // The background answers every refinement request, successful or not, so the
+  // "Improving..." state always resolves.
+  useEffect(
+    () =>
+      onMessage((msg) => {
+        if (msg.type !== "REFINE_RESUME_RESULT") return;
+        setRefining(false);
+        setRefineNote(msg.refined ? "" : (msg.note ?? ""));
+        // Only replace a card the user has not already acted on.
+        setPending((current) =>
+          current === null ? null : { ...current, parsed: msg.parsed },
+        );
+      }),
+    [],
+  );
 
   if (!profile) return <p class="muted">Loading profile...</p>;
 
@@ -148,7 +168,20 @@ export function ProfileView() {
     }
     setImportNote("");
     setPasteOpen(false);
-    setPending({ parsed: parseResume(result.text), from: filename });
+    startImport(parseResume(result.text), filename);
+  };
+
+  /**
+   * Show the heuristic parse immediately, then ask the background to improve it.
+   *
+   * The heuristic result is always on screen first: refinement needs a network
+   * round trip, and a parse the user can already act on should not wait on one.
+   */
+  const startImport = (parsed: ParsedResume, from: string): void => {
+    setPending({ parsed, from });
+    setRefineNote("");
+    setRefining(true);
+    void sendToRuntime({ type: "REFINE_RESUME_REQUEST", parsed });
   };
 
   // Uploads persist immediately: the bytes are already in storage, so the ref
@@ -192,6 +225,8 @@ export function ProfileView() {
     setImportNote("");
     setPasteOpen(false);
     setPasteText("");
+    setRefining(false);
+    setRefineNote("");
     await persistProfile(merged);
     setFlash("Filled from resume");
     window.setTimeout(() => setFlash(""), 2000);
@@ -201,7 +236,7 @@ export function ProfileView() {
   const readPastedText = (): void => {
     if (pasteText.trim() === "") return;
     setImportNote("");
-    setPending({ parsed: parseResume(pasteText), from: "pasted text" });
+    startImport(parseResume(pasteText), "pasted text");
   };
 
   const removeResume = async (id: string): Promise<void> => {
@@ -519,11 +554,20 @@ export function ProfileView() {
             Found {importSummary(pending.parsed)}. Filling only fills fields you have left
             empty — nothing you have typed is overwritten.
           </p>
+          {refining && <p class="muted small">Improving the read with your model...</p>}
+          {refineNote !== "" && <p class="muted small">{refineNote}</p>}
           <div class="row">
             <button class="btn primary" onClick={() => void applyImport()}>
               Fill empty fields
             </button>
-            <button class="btn" onClick={() => setPending(null)}>
+            <button
+              class="btn"
+              onClick={() => {
+                setPending(null);
+                setRefining(false);
+                setRefineNote("");
+              }}
+            >
               Discard
             </button>
           </div>

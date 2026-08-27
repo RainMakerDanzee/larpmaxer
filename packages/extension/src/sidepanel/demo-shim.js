@@ -196,6 +196,18 @@
         setTimeout(() => alert("Demo: LarpMaxer would now create the account with a generated password\nand save it to your browser's password manager."), 300);
         break;
 
+      // The real background refines the parse with the user's own model. The
+      // demo has no key, so it answers the way that case answers for real:
+      // the heuristic parse comes straight back, unrefined.
+      case "REFINE_RESUME_REQUEST":
+        emit({
+          type: "REFINE_RESUME_RESULT",
+          parsed: msg.parsed,
+          refined: false,
+          note: "Demo: no model configured, so this is the rule-based read.",
+        });
+        break;
+
       case "INTAKE_ANSWER":
         emit({ type: "RUN_STATE", record: { id: "demo", url: "https://x", adapterId: "greenhouse", phase: "review" } });
         break;

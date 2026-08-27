@@ -28,6 +28,8 @@ const MESSAGE_TYPE_MAP: Record<Message["type"], true> = {
   REGISTER_RESULT: true,
   QUEUE_REMOVE: true,
   QUEUE_STATE: true,
+  REFINE_RESUME_REQUEST: true,
+  REFINE_RESUME_RESULT: true,
 };
 
 const MESSAGE_TYPES: ReadonlySet<string> = new Set(Object.keys(MESSAGE_TYPE_MAP));

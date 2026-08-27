@@ -35,6 +35,7 @@ tiny pure-TypeScript engine (`@larpmaxer/core`) wrapped by a Chrome extension (M
 | `fill/dom.ts` | Field-discovery helpers: label resolution, visibility checks, selector lookup, value read-back, the ARIA combobox dance. |
 | `adapters/` | Per-ATS knowledge: `greenhouse` / `lever` / `ashby` / `generic` (the fallback, kept last). `registry.ts` holds the ordered list; `pickAdapter` takes the first whose `matchesUrl` + `detect` both pass. |
 | `llm/` | Provider factory (`createProvider`, `DEFAULT_MODELS`, `LlmError`) + Anthropic/OpenAI implementations, evidence-pinned prompts, `makeLlmDelegate` bridge into `answers.ts`. |
+| `resume/` | One upload becomes a profile: `text.ts` reads bytes to text (DOCX via a hand-rolled ZIP reader + `DecompressionStream`; PDF is refused, not guessed), `extract.ts` parses text to a `ParsedResume` heuristically, `refine.ts` improves that with an LLM under a grounding rule — anything not present in the resume text is discarded. |
 | `ledger.ts` | Zero-dependency `.xlsx` writer for the application ledger (hand-rolled OOXML + STORE zip). |
 | `registration.ts` | Auth-wall classification and login/registration form discovery (pure over the document). |
 | `messages.ts` | Runtime guard for the typed message protocol (`isLarpMaxerMessage`); the `Message` union itself lives in `types.ts`. |
@@ -51,6 +52,10 @@ else must run in Node (tests/CLI).
   per-site permission grants. Injects the content script on demand via `chrome.scripting`.
 - `background/queue.ts` — the "apply to anything" link queue: dropped URLs open in background
   worker tabs, run the same pipeline one at a time, and narrate progress as `QUEUE_STATE`.
+- `background/resume.ts` — answers `REFINE_RESUME_REQUEST`. The panel reads the resume locally
+  and sends the heuristic parse; this refines it with the configured provider, because the
+  background is the only context that touches the API key. No provider, or any failure, returns
+  the parse unchanged.
 - `background/artifacts.ts` — after every submission, saves a per-application folder
   (summary, answers + sources, fill report, the exact resume) plus a regenerated
   `ledger.xlsx` to Downloads/LarpMaxer (zero-dep xlsx writer in `core/ledger.ts`).

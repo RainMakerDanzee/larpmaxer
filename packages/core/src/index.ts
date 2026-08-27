@@ -20,3 +20,4 @@ export * from "./ledger.js";
 export * from "./registration.js";
 export * from "./resume/extract.js";
 export * from "./resume/text.js";
+export * from "./resume/refine.js";

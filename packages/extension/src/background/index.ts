@@ -7,6 +7,7 @@ import { isMessage, type Message } from "@larpmaxer/core";
 import { onMessage } from "../lib/messaging.js";
 import * as run from "./run.js";
 import * as queue from "./queue.js";
+import * as resume from "./resume.js";
 
 // Toolbar button opens the side panel (MV3-sanctioned; needs Chrome 114+).
 chrome.sidePanel
@@ -39,6 +40,7 @@ async function route(msg: Message, sender: chrome.runtime.MessageSender): Promis
   if (isMessage(msg, "QUEUE_LINK")) return queue.handleQueueLink(msg);
   if (isMessage(msg, "QUEUE_REMOVE")) return queue.handleQueueRemove(msg);
   if (isMessage(msg, "QUEUE_STATE")) return queue.broadcast(); // panel ping-for-state
+  if (isMessage(msg, "REFINE_RESUME_REQUEST")) return resume.handleRefineRequest(msg);
   // PLAN_READY / RUN_STATE / HUMAN_NEEDED are background→panel broadcasts;
   // they never need routing here.
 }
