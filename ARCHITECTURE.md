@@ -33,6 +33,7 @@ tiny pure-TypeScript engine (`@larpmaxer/core`) wrapped by a Chrome extension (M
 | `fill/events.ts` | React/Vue-proof input: native prototype setters + `input`/`change` events, checkbox/option click helpers, `needsTrustedKeyboard`. |
 | `fill/files.ts` | Resume attach without OS dialogs: bytes → `File` → `DataTransfer` → `input.files` + `change`. |
 | `fill/dom.ts` | Field-discovery helpers: label resolution, visibility checks, selector lookup, value read-back, the ARIA combobox dance. |
+| `discovery/` | Works on sites nobody has adapted. `survey.ts` walks the DOM into a NUMBERED list of controls and buttons; `classify.ts` asks a model which of them form an application and which button submits. The model may answer only with indices into that list, so it can never emit a selector, a value, or a control that does not exist — page text is untrusted, and this is the containment. Used when the heuristics come back unusable (nothing found, or labels that do not tell the fields apart). |
 | `adapters/` | Per-ATS knowledge: `greenhouse` / `lever` / `ashby` / `generic` (the fallback, kept last). `registry.ts` holds the ordered list; `pickAdapter` takes the first whose `matchesUrl` + `detect` both pass. |
 | `llm/` | Provider factory (`createProvider`, `DEFAULT_MODELS`, `LlmError`) + Anthropic/OpenAI implementations, evidence-pinned prompts, `makeLlmDelegate` bridge into `answers.ts`. |
 | `resume/` | One upload becomes a profile: `text.ts` reads bytes to text (DOCX via a hand-rolled ZIP reader + `DecompressionStream`; PDF is refused, not guessed), `extract.ts` parses text to a `ParsedResume` heuristically, `refine.ts` improves that with an LLM under a grounding rule — anything not present in the resume text is discarded. |
@@ -67,6 +68,24 @@ else must run in Node (tests/CLI).
 - Permissions: `storage`, `sidePanel`, `scripting`, `activeTab`, plus fixed host permissions for
   the two LLM APIs (`api.anthropic.com`, `api.openai.com`); ATS host access is granted per-site
   by the user (optional host permissions) — never `<all_urls>` by default.
+
+### How a page gets read
+
+Three tiers, most specific first:
+
+1. **An ATS adapter** (`greenhouse`, `lever`, `ashby`) — real knowledge of that
+   system, including its quirks. Always wins when it matches.
+2. **The generic adapter** — label/ARIA heuristics for conventionally marked-up
+   forms. Cheap, deterministic, no model needed.
+3. **A model reading a survey** (`discovery/`) — when the heuristics come back
+   empty, or come back with labels that do not distinguish the fields (a form
+   captioned with plain divs resolves every input to the nearest heading, which
+   names none of them). The model chooses from a numbered list; every selector
+   still comes from the DOM walk.
+
+A plan built at tier 3 carries its own `fields` and `submitSelector`, and those
+beat any adapter at fill time — an adapter that merely tolerated the page must
+not re-import the field list that was rejected as unusable.
 
 ## Non-negotiable product rules
 1. **Truthful fill.** Every answer traces to the user's profile or their explicit intake answer.

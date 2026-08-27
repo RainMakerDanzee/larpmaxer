@@ -32,6 +32,8 @@ const PORT = 8931;
 // https, not http: LarpMaxer refuses to run on plain http, and a test that
 // worked around that would stop exercising the real entry conditions.
 const HOST = "boards.greenhouse.io";
+// A host no adapter matches, for the classified-page scenario.
+const UNKNOWN_HOST = "careers.northwind.example";
 const ORIGIN = `https://${HOST}:${PORT}`;
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
@@ -65,7 +67,7 @@ function selfSignedCert(dir) {
     "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
     "-keyout", key, "-out", cert,
     "-subj", `/CN=${HOST}`,
-    "-addext", `subjectAltName=DNS:${HOST}`,
+    "-addext", `subjectAltName=DNS:${HOST},DNS:${UNKNOWN_HOST}`,
   ], { stdio: "ignore" });
   return { key, cert };
 }
@@ -96,7 +98,11 @@ async function buildTestExtension() {
   await cp(DIST, dir, { recursive: true });
   const manifestPath = join(dir, "manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-  manifest.host_permissions = [...(manifest.host_permissions ?? []), `${ORIGIN}/*`];
+  manifest.host_permissions = [
+    ...(manifest.host_permissions ?? []),
+    `${ORIGIN}/*`,
+    `https://${UNKNOWN_HOST}:${PORT}/*`,
+  ];
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
   return dir;
 }
@@ -135,6 +141,59 @@ const PROFILE = {
   resumes: [{ id: "resume-1", filename: "riley-park-cv.txt", mime: "text/plain" }],
 };
 
+/**
+ * Install a stand-in for Chrome's on-device model in the service worker.
+ *
+ * The real Gemini Nano weights cannot be downloaded in CI, and the point of
+ * this scenario is the pipeline around the model, not the model. The stub
+ * answers by PARSING THE PROMPT it is given — so if the prompt format ever
+ * stops naming controls the way classify.ts intends, this test fails rather
+ * than passing on a hardcoded answer.
+ */
+async function installStubModel(sw) {
+  await sw.evaluate(() => {
+    globalThis.LanguageModel = {
+      availability: async () => "available",
+      create: async () => ({
+        prompt: async (input) => {
+          // Answer prompts (one field at a time) are not this stub's job.
+          if (!input.includes("Form controls:")) return "UNKNOWN";
+          const controls = [...input.matchAll(/^(\d+)\. \[(\w+)\] (.*)$/gm)].map((m) => ({
+            index: Number(m[1]),
+            kind: m[2],
+            text: m[3],
+          }));
+          const buttons = [...input.matchAll(/^(\d+)\. "(.*)"$/gm)].map((m) => ({
+            index: Number(m[1]),
+            text: m[2],
+          }));
+          const isJobAlert = (t) => /subscribe|alert|newsletter/i.test(t);
+          const fields = controls
+            .filter((c) => !isJobAlert(c.text))
+            .map((c) => ({ index: c.index, meaning: meaningOf(c.text) }));
+          const submit = buttons.find((b) => /send|submit|apply/i.test(b.text));
+          return JSON.stringify({
+            isApplicationForm: fields.length > 0,
+            fields,
+            ...(submit ? { submitIndex: submit.index } : {}),
+          });
+
+          function meaningOf(text) {
+            const t = text.toLowerCase();
+            if (t.includes("name")) return "full_name";
+            if (t.includes("email")) return "email";
+            if (t.includes("phone")) return "phone";
+            if (t.includes("cv") || t.includes("resume")) return "resume";
+            if (t.includes("sponsor")) return "sponsorship";
+            return "other";
+          }
+        },
+        destroy() {},
+      }),
+    };
+  });
+}
+
 async function main() {
   const certDir = await mkdtemp(join(tmpdir(), "larpmaxer-tls-"));
   const paths = selfSignedCert(certDir);
@@ -156,7 +215,7 @@ async function main() {
       "--no-sandbox",
       "--ignore-certificate-errors",
       // Point the real ATS hostname at the local fixture server.
-      `--host-resolver-rules=MAP ${HOST} 127.0.0.1`,
+      `--host-resolver-rules=MAP ${HOST} 127.0.0.1, MAP ${UNKNOWN_HOST} 127.0.0.1`,
       // Everything in this test is local; a configured proxy would otherwise
       // intercept the mapped hostname and break the connection.
       "--no-proxy-server",
@@ -223,8 +282,10 @@ async function main() {
       } catch (err) {
         const states = await seen("RUN_STATE");
         const last = states[states.length - 1];
+        const blocked = (await seen("HUMAN_NEEDED")).slice(-1)[0];
         throw new Error(
-          `${err.message}. Last run state: ${last ? JSON.stringify(last.record) : "none"}`,
+          `${err.message}. Last run state: ${last ? JSON.stringify(last.record) : "none"}` +
+            (blocked ? `. Handed back: ${blocked.reason} — ${blocked.detail}` : ""),
         );
       }
     };
@@ -301,24 +362,93 @@ async function main() {
     // The first step of a multi-step form shows a couple of name fields and a
     // Next button: no email, no submit, no resume field. The generic adapter
     // must refuse it rather than claim it, for the same reason it refuses a
-    // job-board search page — offering someone their own form controls as
-    // interview questions is worse than admitting the page is not fillable.
-    // Next-button pagination is exactly what search results have too, which is
-    // why multi-step support is opt-in per adapter (quirks.paginated) and not
-    // inferred from the page.
+    // job-board search page. Next-button pagination is exactly what search
+    // results have too, which is why multi-step support is opt-in per adapter
+    // (quirks.paginated) and not inferred from the page.
     await job.goto(`${ORIGIN}/paginated.html`, { waitUntil: "domcontentloaded" });
     await panel.evaluate(() => {
       window.__seen = [];
     });
     await send({ type: "DETECT_REQUEST", tabId });
-    const declined = await await1("DETECT_RESULT");
-    check(
-      "declines a page with no evidence of an application form",
-      declined.adapterId === null,
-      String(declined.adapterId),
-    );
+    await await1("DETECT_RESULT");
     const handoff = (await seen("HUMAN_NEEDED"))[0];
-    check("hands that page back to the user", handoff?.reason === "unknown_page", JSON.stringify(handoff ?? null));
+    check(
+      "hands back a page with no evidence of an application, rather than filling it",
+      handoff?.reason === "unknown_page",
+      JSON.stringify(handoff ?? null),
+    );
+    check("and never claimed to have filled it", (await seen("PLAN_READY")).length === 0);
+
+    // --- a site no adapter has ever seen ---------------------------------
+    // The whole point of the classified path: an unknown ATS on an unknown
+    // host, filled because a model read the survey — not because anyone wrote
+    // an adapter for it.
+    // This scenario is the one that needs a model: turn it on, and stand a
+    // stub in for the on-device one, whose weights cannot be fetched in CI.
+    await panel.evaluate(async () => {
+      await chrome.storage.local.set({
+        settings: {
+          autonomy: "review",
+          saveArtifacts: false,
+          autoRegister: false,
+          llm: { provider: "chrome", apiKey: "", model: "" },
+        },
+      });
+    });
+    await installStubModel(sw);
+    await job.goto(`https://${UNKNOWN_HOST}:${PORT}/unknown-ats.html`, {
+      waitUntil: "domcontentloaded",
+    });
+    await panel.evaluate(() => {
+      window.__seen = [];
+    });
+    await send({ type: "DETECT_REQUEST", tabId });
+
+    const uDetect = await await1("DETECT_RESULT");
+    check(
+      "no ATS-specific adapter recognises the unknown site",
+      uDetect.adapterId === "universal" || uDetect.adapterId === "generic",
+      String(uDetect.adapterId),
+    );
+
+    const uPlan = await await1("PLAN_READY");
+    const uAnswers = new Map(uPlan.plan.answers.map((a) => [a.fieldId, a.value]));
+    check("the model's field choices became a plan", uAnswers.size > 0, JSON.stringify([...uAnswers]));
+    check(
+      "the plan carries its own field model, having no adapter to re-discover through",
+      Array.isArray(uPlan.plan.fields) && uPlan.plan.fields.length > 0,
+    );
+    check(
+      "the submit control came from the page's own buttons",
+      uPlan.plan.submitSelector === "#nw-go",
+      String(uPlan.plan.submitSelector),
+    );
+    check(
+      "the site search box was never treated as a question",
+      !JSON.stringify(uPlan.plan.fields).includes("nw-find"),
+    );
+    check(
+      "the newsletter signup was not mistaken for the application",
+      !JSON.stringify(uPlan.plan.fields).includes("nw-news"),
+    );
+
+    await send({ type: "EXECUTE_PLAN", tabId, plan: uPlan.plan });
+    await await1("FILL_REPORT");
+    const uPage = await job.evaluate(() => ({
+      name: document.getElementById("nw-a1").value,
+      email: document.getElementById("nw-a2").value,
+      phone: document.getElementById("nw-a3").value,
+      cv: document.getElementById("nw-a4").files[0]?.name ?? null,
+      submitted: /thank you for applying/i.test(document.body.innerText),
+    }));
+    check("filled a form no adapter knows: name", uPage.name === "Riley Park", uPage.name);
+    check("filled a form no adapter knows: email", uPage.email === PROFILE.email, uPage.email);
+    check("attached the resume on an unknown site", uPage.cv === "riley-park-cv.txt", String(uPage.cv));
+    check("did not submit before being told to", uPage.submitted === false);
+
+    await send({ type: "APPROVE_SUBMIT", tabId });
+    const uSubmit = await await1("SUBMIT_RESULT");
+    check("submitted on a site nobody wrote an adapter for", uSubmit.result.submitted === true, JSON.stringify(uSubmit.result.evidence));
 
   } finally {
     await ctx.close();

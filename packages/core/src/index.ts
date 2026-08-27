@@ -15,6 +15,8 @@ export * from "./fill/files.js";
 export * from "./fill/dom.js";
 export * from "./fill/pagination.js";
 export * from "./adapters/index.js";
+export * from "./discovery/survey.js";
+export * from "./discovery/classify.js";
 export * from "./llm/index.js";
 export * from "./messages.js";
 export * from "./ledger.js";

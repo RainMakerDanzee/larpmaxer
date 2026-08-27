@@ -89,9 +89,13 @@ These are product rules, not settings:
 | Lever | `lever` | Supported | `jobs.lever.co` postings |
 | Ashby | `ashby` | Supported | React form; trusted-keystroke quirk handled |
 | Everything else | `generic` | Best effort | Label/ARIA-based discovery — review the artifact carefully |
+| Anything the above can't read | `universal` | Model-read | The panel surveys the page and a model says which controls are the application. Works on sites nobody has written an adapter for; needs a model configured (the built-in one counts). Review the artifact carefully |
 
-Yours missing? An adapter is a small pure function pair plus a fixture-driven test —
-[write one in about 30 minutes](docs/adapters.md).
+Yours missing? It should still fill: when no adapter can read a page, LarpMaxer describes the
+page's controls to your model and asks which of them are the application — so a site nobody has
+adapted works without anyone writing code for it. An adapter is still better where one exists,
+because it knows the ATS's quirks, and it needs no model at all: a small pure function pair plus
+a fixture-driven test, [about 30 minutes](docs/adapters.md).
 
 ## Architecture
 

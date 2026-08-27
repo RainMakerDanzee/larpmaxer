@@ -8,6 +8,7 @@
 // The message protocol carries a resume parse, whose shape resume/extract.ts
 // owns. Type-only, so this import is erased and forms no runtime cycle.
 import type { ParsedResume } from "./resume/extract.js";
+import type { PageSurvey } from "./discovery/survey.js";
 
 // ---------------------------------------------------------------------------
 // Profile — everything LarpMaxer is allowed to say about the user.
@@ -157,6 +158,16 @@ export interface FillPlan {
   answers: ResolvedAnswer[];
   /** Fields awaiting the user; plan is not executable while non-empty. */
   needsUser: OpenQuestion[];
+  /**
+   * The field model this plan was built from, carried only when it did not
+   * come from an adapter — i.e. a model classified the page. The executor
+   * re-discovers through the adapter when this is absent, which is what keeps
+   * SPA selectors fresh; for a classified page there is nothing to re-discover
+   * through, so the model travels with the plan.
+   */
+  fields?: FormField[];
+  /** Submit control for a classified page, chosen from the page's own buttons. */
+  submitSelector?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -352,7 +363,17 @@ export type Message =
   | { type: "DETECT_REQUEST"; tabId: number }
   | { type: "DETECT_RESULT"; tabId: number; adapterId: string | null; jobTitle?: string }
   | { type: "DISCOVER_REQUEST"; tabId: number }
-  | { type: "DISCOVER_RESULT"; tabId: number; fields: FormField[] }
+  | {
+      type: "DISCOVER_RESULT";
+      tabId: number;
+      fields: FormField[];
+      /**
+       * Present when no adapter claimed the page: the numbered control list a
+       * model classifies instead (discovery/survey.ts). Never carries anything
+       * the model may act on directly.
+       */
+      survey?: PageSurvey;
+    }
   | { type: "PLAN_READY"; plan: FillPlan }
   | { type: "INTAKE_ANSWER"; fieldId: string; value: string; saveToQaBank: boolean }
   | { type: "EXECUTE_PLAN"; tabId: number; plan: FillPlan }

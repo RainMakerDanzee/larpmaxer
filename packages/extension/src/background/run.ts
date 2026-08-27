@@ -26,7 +26,11 @@ import type {
   ResolvedAnswer,
 } from "@larpmaxer/core";
 import {
+  actionSelector,
+  classifyPage,
   createProvider,
+  fieldsFromSurvey,
+  heuristicIsUnusable,
   makeLlmDelegate,
   mergeQaEntry,
   recordOpenQuestions,
@@ -155,8 +159,40 @@ export async function handleDiscoverResult(msg: Msg<"DISCOVER_RESULT">): Promise
       await fail(run, "no profile yet — fill in your profile in the side panel first");
       return;
     }
+
+    // No adapter found fields, but the content script surveyed the page: ask
+    // the model what it is. This is what lets a site nobody has adapted work.
+    let fields = msg.fields;
+    let submitSelector: string | undefined;
+    const heuristicFailed = heuristicIsUnusable(fields);
+    if (heuristicFailed && msg.survey !== undefined) {
+      const classified = await classifySurvey(msg.survey);
+      if (classified === undefined) {
+        await humanNeeded(
+          run,
+          "unknown_page",
+          "No adapter knows this site, and no model is available to read it — apply manually.",
+        );
+        return;
+      }
+      if (!classified.isApplicationForm) {
+        await humanNeeded(
+          run,
+          "unknown_page",
+          classified.note ?? "This does not look like an application form — apply manually.",
+        );
+        return;
+      }
+      fields = fieldsFromSurvey(msg.survey, classified);
+      submitSelector = actionSelector(msg.survey, classified.submitIndex);
+      if (fields.length === 0) {
+        await humanNeeded(run, "unknown_page", "Nothing on this page could be read as a question.");
+        return;
+      }
+    }
+
     const llm = await llmDelegate();
-    const resolved = await resolveAnswers(msg.fields, profile, llm);
+    const resolved = await resolveAnswers(fields, profile, llm);
     // Every question this form asked and we could not answer joins the bank
     // unanswered, so the user can fill it in later instead of meeting it again
     // on the next posting. Additive: an existing answer is never touched.
@@ -175,6 +211,10 @@ export async function handleDiscoverResult(msg: Msg<"DISCOVER_RESULT">): Promise
       company: run.record.company,
       answers: resolved.answers,
       needsUser: resolved.needsUser,
+      // Carried only for a classified page: the executor has no adapter to
+      // re-discover through, and submit has no adapter selector to use.
+      ...(heuristicFailed && msg.survey !== undefined ? { fields } : {}),
+      ...(submitSelector !== undefined ? { submitSelector } : {}),
     };
     await planReady(run);
   });
@@ -426,6 +466,19 @@ async function planReady(run: Run): Promise<void> {
   } else {
     run.record.phase = "review"; // plan preview; panel sends EXECUTE_PLAN to approve
     await emitState(run);
+  }
+}
+
+/** Ask the configured model to classify a surveyed page; undefined if it cannot. */
+async function classifySurvey(
+  survey: NonNullable<Msg<"DISCOVER_RESULT">["survey"]>,
+): Promise<Awaited<ReturnType<typeof classifyPage>>> {
+  const { llm } = await getSettings();
+  if (llm === undefined) return undefined;
+  try {
+    return await classifyPage(survey, createProvider(llm));
+  } catch {
+    return undefined;
   }
 }
 

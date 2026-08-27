@@ -76,11 +76,16 @@ export function selectOptions(el: Element): string[] {
 
 // labelFor already falls back through aria-label/labelledby/wrapping label/
 // preceding heading; the placeholder is the last resort beyond all of those.
-function resolveLabel(el: Element): string {
+/** Visible label for a control, falling back to its placeholder. */
+export function resolveLabel(el: Element): string {
   return labelFor(el) || (el.getAttribute("placeholder") ?? "").trim();
 }
 
-function selectorFor(el: Element, doc: Document): string {
+/**
+ * A selector that will still resolve at fill time, stamping a marker
+ * attribute when the element offers nothing stable.
+ */
+export function selectorFor(el: Element, doc: Document): string {
   const id = el.id;
   if (id) return /^[A-Za-z_][\w-]*$/.test(id) ? `#${id}` : `[id="${id}"]`;
   const name = el.getAttribute("name");
@@ -93,7 +98,7 @@ function selectorFor(el: Element, doc: Document): string {
 }
 
 /** Question text for a radio/checkbox group: fieldset legend, else the container's first option-free label. */
-function groupLabel(first: Element): string {
+export function groupLabel(first: Element): string {
   const legend = first.closest("fieldset")?.querySelector("legend");
   if (legend) return parseLabel(legend.textContent ?? "").label;
   const container = first.closest("div, fieldset, li, section");
@@ -108,7 +113,7 @@ function groupLabel(first: Element): string {
 }
 
 /** Visible text of one radio/checkbox choice (usually its wrapping label). */
-function choiceLabel(input: Element): string {
+export function choiceLabel(input: Element): string {
   const parent = input.parentElement;
   if (parent && parent.tagName === "LABEL") return parseLabel(parent.textContent ?? "").label;
   return parseLabel(labelFor(input)).label;
@@ -119,7 +124,8 @@ const CHROME_SELECTOR =
   'nav, header, footer, aside, [role="search"], [role="navigation"], [role="banner"], [role="contentinfo"], [role="complementary"]';
 
 /** A control that is part of the site's own search/filter UI, not a question. */
-function isSiteChrome(el: Element): boolean {
+/** True when the control belongs to the site's own nav/search furniture. */
+export function isSiteChrome(el: Element): boolean {
   if ((el.getAttribute("type") ?? "").toLowerCase() === "search") return true;
   return el.closest(CHROME_SELECTOR) !== null;
 }

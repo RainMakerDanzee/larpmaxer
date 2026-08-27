@@ -12,6 +12,9 @@ import {
   comboboxSelect,
   findNextControl,
   needsTrustedKeyboard,
+  surveyPage,
+  UNIVERSAL_ADAPTER_ID,
+  UNIVERSAL_SUCCESS_MARKERS,
   pageSignature,
   pickAdapter,
   readBack,
@@ -67,6 +70,16 @@ function sendResult(msg: Message): void {
 /** Adapter matched on this page; re-picked on every DETECT_REQUEST (SPA navigations). */
 let currentAdapter: Adapter | null = null;
 
+/**
+ * Survey of the page taken when no adapter claimed it, so a model can classify
+ * it instead. Re-taken on every detect; cleared when an adapter does claim the
+ * page, because adapter knowledge is always better than a classification.
+ */
+let currentSurvey: ReturnType<typeof surveyPage> | null = null;
+
+/** The plan last executed here, so submit can find the classified page's button. */
+let lastPlan: FillPlan | null = null;
+
 function adapterForPage(): Adapter | null {
   currentAdapter ??= pickAdapter(window.location.href, document);
   return currentAdapter;
@@ -85,11 +98,20 @@ chrome.runtime.onMessage.addListener(
     switch (msg.type) {
       case "DETECT_REQUEST": {
         currentAdapter = pickAdapter(window.location.href, document);
+        currentSurvey = null;
+        // No adapter knows this site. Rather than handing the page back, take
+        // a survey of it: a model decides whether it is an application, from
+        // the numbered control list alone. An adapter always wins when one
+        // matches — it knows the ATS's quirks, which a classification cannot.
+        if (currentAdapter === null) {
+          const survey = surveyPage(document);
+          if (survey.controls.length > 0) currentSurvey = survey;
+        }
         const jobTitle = findJobTitle();
         sendResult({
           type: "DETECT_RESULT",
           tabId: msg.tabId,
-          adapterId: currentAdapter?.id ?? null,
+          adapterId: currentAdapter?.id ?? (currentSurvey !== null ? UNIVERSAL_ADAPTER_ID : null),
           ...(jobTitle !== undefined ? { jobTitle } : {}),
         });
         return undefined;
@@ -102,7 +124,19 @@ chrome.runtime.onMessage.addListener(
         } catch {
           fields = []; // a broken page must not kill the message channel
         }
-        sendResult({ type: "DISCOVER_RESULT", tabId: msg.tabId, fields });
+        // Survey whenever the page is not covered by real ATS knowledge: with
+        // no adapter at all, or with the generic one, whose heuristics give up
+        // on anything unconventionally labelled. A model reading the survey is
+        // the fallback for both. A specific adapter is never second-guessed.
+        const heuristic = adapter === null || adapter.id === "generic";
+        const survey = heuristic ? surveyPage(document) : null;
+        if (survey !== null) currentSurvey = survey;
+        sendResult({
+          type: "DISCOVER_RESULT",
+          tabId: msg.tabId,
+          fields,
+          ...(survey !== null ? { survey } : {}),
+        });
         return undefined;
       }
       case "EXECUTE_PLAN": {
@@ -198,7 +232,10 @@ async function executePlan(tabId: number, plan: FillPlan): Promise<Message> {
   }
 
   const adapter = adapterForPage();
-  if (adapter === null) {
+  // A page a model classified has no adapter to re-discover through, so the
+  // plan carries the field model it was built from.
+  const planned = plan.fields ?? null;
+  if (adapter === null && planned === null) {
     report.fields = plan.answers.map((a) => ({
       fieldId: a.fieldId,
       label: a.fieldId,
@@ -207,8 +244,9 @@ async function executePlan(tabId: number, plan: FillPlan): Promise<Message> {
     }));
     return { type: "FILL_REPORT", tabId, report };
   }
+  lastPlan = plan;
 
-  const quirks = adapter.quirks ?? {};
+  const quirks = adapter?.quirks ?? {};
   // Answers still looking for a home. On a single-page form this empties in
   // one pass; on a paginated one it drains across steps, and whatever is left
   // at the end genuinely was not on the form.
@@ -224,8 +262,15 @@ async function executePlan(tabId: number, plan: FillPlan): Promise<Message> {
   for (;;) {
     pages++;
     // Selectors can go stale between discover and execute on SPA forms, so
-    // re-discover now and join the plan's answers to live fields by id.
-    const fields = new Map(adapter.discover(document).map((f) => [f.id, f] as const));
+    // re-discover now and join the plan's answers to live fields by id. A
+    // classified page has nothing to re-discover through and uses the plan's
+    // own model, whose selectors were stamped onto the elements at survey time.
+    // The plan wins when it carries its own fields. That only happens when the
+    // heuristics were unusable and a model read the page instead, so going back
+    // to the adapter here would re-import exactly the field list that was
+    // rejected — five inputs all called "Submit your details".
+    const live = planned ?? (adapter !== null ? adapter.discover(document) : []);
+    const fields = new Map(live.map((f) => [f.id, f] as const));
 
     // A step whose fields we have already filled means the Next click did not
     // advance. Stopping is the only safe response: clicking on would be
@@ -608,7 +653,16 @@ async function approveSubmit(tabId: number): Promise<Message> {
   });
 
   const adapter = adapterForPage();
-  if (adapter === null) return fail(["no adapter matches this page"]);
+  // Same precedence as the fill: a plan that names its own submit control was
+  // built by reading this page, which beats an adapter that merely tolerated it.
+  const submitSelector = lastPlan?.submitSelector ?? adapter?.submitSelector;
+  const successMarkers =
+    lastPlan?.submitSelector !== undefined
+      ? UNIVERSAL_SUCCESS_MARKERS
+      : (adapter?.successMarkers ?? UNIVERSAL_SUCCESS_MARKERS);
+  if (submitSelector === undefined) {
+    return fail(["nothing on this page was identified as a submit control"]);
+  }
 
   // CAPTCHAs (and any login wall that appeared) gate submission — a human
   // must act first; we never solve or bypass them.
@@ -618,14 +672,14 @@ async function approveSubmit(tabId: number): Promise<Message> {
     return fail([`${blocker.reason} blocker: ${blocker.detail}`]);
   }
 
-  const control = findSubmitControl(adapter);
-  if (control === null) return fail([`submit control not found (selector: ${adapter.submitSelector})`]);
+  const control = findSubmitControl(adapter, submitSelector);
+  if (control === null) return fail([`submit control not found (selector: ${submitSelector})`]);
   control.click();
 
   await sleep(SUBMIT_WAIT_MS); // give the ATS time to submit and swap views
 
   const bodyText = (document.body?.innerText ?? "").toLowerCase();
-  const markers = adapter.successMarkers.filter((m) => bodyText.includes(m.toLowerCase()));
+  const markers = successMarkers.filter((m) => bodyText.includes(m.toLowerCase()));
   if (markers.length > 0) {
     return { type: "SUBMIT_RESULT", tabId, result: { submitted: true, evidence: markers } };
   }
@@ -643,10 +697,10 @@ async function approveSubmit(tabId: number): Promise<Message> {
  * adapter we locate it by visible text; everyone else trusts submitSelector,
  * with the text scan as a mutual fallback.
  */
-function findSubmitControl(adapter: Adapter): HTMLElement | null {
-  const bySelector = document.querySelector<HTMLElement>(adapter.submitSelector);
+function findSubmitControl(adapter: Adapter | null, selector: string): HTMLElement | null {
+  const bySelector = document.querySelector<HTMLElement>(selector);
   const byText = findSubmitByText();
-  return adapter.id === "ashby" ? (byText ?? bySelector) : (bySelector ?? byText);
+  return adapter?.id === "ashby" ? (byText ?? bySelector) : (bySelector ?? byText);
 }
 
 function findSubmitByText(): HTMLElement | null {
