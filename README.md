@@ -64,6 +64,12 @@ Everything it does lives in plain files next to your resume — the profile, a
 ledger CSV of every application with original links, and a folder of artifacts
 per application. Yours to read, edit, or take elsewhere.
 
+## Prefer OpenAI?
+
+The same agent runs on Codex — you sign in with your ChatGPT account instead
+(Plus is enough, no API key). Same playbook, same rules, packaged as Codex
+skills: see [codex/README.md](codex/README.md).
+
 ## How it's built
 
 There is no code to build or trust: the whole product is the markdown in this

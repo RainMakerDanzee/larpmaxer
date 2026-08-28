@@ -1,0 +1,13 @@
+{
+  "plugins": [
+    {
+      "name": "larpmaxer",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/RainMakerDanzee/larpmaxer"
+      },
+      "category": "productivity",
+      "description": "Job applications, agentically \u2014 truthful tailoring, approval-gated submission."
+    }
+  ]
+}

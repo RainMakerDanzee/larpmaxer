@@ -1,0 +1,9 @@
+{
+  "name": "larpmaxer",
+  "version": "0.1.0",
+  "description": "Your job search, run by an agent: reads your resume once, then researches roles, tailors truthfully, fills applications in the browser, and submits only on your word.",
+  "skills": "./codex/skills",
+  "interface": {
+    "displayName": "LarpMaxer Agent"
+  }
+}

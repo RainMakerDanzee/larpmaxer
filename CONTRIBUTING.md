@@ -27,5 +27,12 @@ Ground rules for any change:
 - Write rules the way the existing ones are written: imperative, concrete,
   and justified by something that actually happened.
 
+One maintenance rule: the operating manual exists twice — [AGENT.md](AGENT.md)
+for Claude Code and
+[codex/skills/larpmaxer-intake/references/AGENTS.md](codex/skills/larpmaxer-intake/references/AGENTS.md)
+for Codex (same content; only invocation names and the browser section
+differ). A PR that changes one must change the other, and the six skills in
+[skills/](skills/) and [codex/skills/](codex/skills/) pair up the same way.
+
 The archived Chrome extension on the `extension-archive` branch is frozen —
 PRs against it won't be reviewed.
