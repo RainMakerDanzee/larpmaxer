@@ -1,9 +1,0 @@
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    // DOM is needed by the fill/* modules; keep DOM types out of non-fill
-    // modules by convention (core must run in Node for tests and CLIs).
-    "lib": ["ES2022", "DOM"]
-  },
-  "include": ["src", "test"]
-}

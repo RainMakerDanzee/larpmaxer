@@ -9,7 +9,7 @@
     {
       "name": "larpmaxer",
       "displayName": "LarpMaxer Agent",
-      "source": "./plugin",
+      "source": "./",
       "description": "Reads your resume once, then researches roles, tailors truthfully, fills applications in the browser, and submits only on your word.",
       "tags": ["job-search", "applications", "browser", "agent"]
     }

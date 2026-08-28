@@ -1,9 +1,0 @@
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "types": ["chrome"]
-  },
-  // Both flat (background/, content/, sidepanel/) and src/-nested layouts are
-  // matched; TypeScript ignores include entries that do not exist.
-  "include": ["src", "background", "content", "sidepanel", "test"]
-}
