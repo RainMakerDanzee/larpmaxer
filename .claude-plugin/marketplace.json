@@ -1,0 +1,17 @@
+{
+  "name": "larpmaxer",
+  "owner": {
+    "name": "RainMakerDanzee",
+    "url": "https://github.com/RainMakerDanzee/larpmaxer"
+  },
+  "description": "LarpMaxer — job applications, agentically.",
+  "plugins": [
+    {
+      "name": "larpmaxer",
+      "displayName": "LarpMaxer Agent",
+      "source": "./plugin",
+      "description": "Reads your resume once, then researches roles, tailors truthfully, fills applications in the browser, and submits only on your word.",
+      "tags": ["job-search", "applications", "browser", "agent"]
+    }
+  ]
+}

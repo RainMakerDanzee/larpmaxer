@@ -6,10 +6,19 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-LarpMaxer is a Chrome extension (Manifest V3) wrapped around a tiny, zero-dependency TypeScript
-engine. It fills job application forms from a profile that lives entirely on your machine: it
-types what you would type, pauses when it doesn't know something, and — unless you explicitly
-opt into auto mode — submits nothing until you have seen exactly what it filled.
+LarpMaxer comes in two forms that share one philosophy — truthful answers, your data on your
+machine, nothing submitted until you say so:
+
+- **[LarpMaxer Agent](plugin/README.md)** — the full agent, packaged as a Claude Code plugin.
+  You drop in a resume and a job link; it researches the role, tailors materials it can prove
+  are true, fills the application in a real browser, and stops before submit. This is the
+  battle-tested path — the playbook it runs was distilled from real submissions across Ashby,
+  SEEK, and LinkedIn. Needs a Claude subscription (Pro is enough); no API key.
+- **The Chrome extension** (this repo's `packages/`) — a Manifest V3 extension around a tiny,
+  zero-dependency TypeScript engine that autofills known ATS forms deterministically from your
+  saved profile. No subscription needed; best on Greenhouse/Lever/Ashby forms it has adapters
+  for. It types what you would type, pauses when it doesn't know something, and — unless you
+  explicitly opt into auto mode — submits nothing until you have seen exactly what it filled.
 
 ![The LarpMaxer side panel: a queue of postings colour-coded by state, the current tab detected as a Greenhouse form, and two questions it could not answer truthfully waiting for you.](docs/img/hero.png)
 
