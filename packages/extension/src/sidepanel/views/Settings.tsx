@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import {
   chromeAiAvailability,
+  promptOnDevice,
   downloadOnDeviceModel,
   DEFAULT_MODELS,
   type ChromeAiAvailability,
@@ -199,7 +200,24 @@ export function SettingsView() {
     if (provider === "chrome") {
       const state = await chromeAiAvailability();
       setAiState(state);
-      setTestMsg(AI_STATE_TEXT[state]);
+      if (state !== "available") {
+        setTestMsg(AI_STATE_TEXT[state]);
+      } else {
+        // Proof of life, not a probe: make the model actually answer, and show
+        // how long it took — the first call after a browser start loads the
+        // weights and can take ~30s, which otherwise reads as "broken".
+        setTestMsg("Asking the on-device model… first answer after a browser start can take ~30s.");
+        const started = performance.now();
+        try {
+          const reply = await promptOnDevice([
+            { role: "user", content: "Reply with one short sentence confirming you are running." },
+          ]);
+          const secs = ((performance.now() - started) / 1000).toFixed(1);
+          setTestMsg(`Answered in ${secs}s: “${reply.trim().slice(0, 120)}”`);
+        } catch (err) {
+          setTestMsg(err instanceof Error ? err.message : String(err));
+        }
+      }
     } else {
       const probeModel = model.trim() === "" ? defaultModel(provider) : model;
       setTestMsg(await probeKey({ provider, apiKey, model: probeModel }));

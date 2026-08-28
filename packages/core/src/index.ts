@@ -23,5 +23,6 @@ export * from "./ledger.js";
 export * from "./dates.js";
 export * from "./registration.js";
 export * from "./resume/extract.js";
+export * from "./jobUrl.js";
 export * from "./resume/text.js";
 export * from "./resume/refine.js";

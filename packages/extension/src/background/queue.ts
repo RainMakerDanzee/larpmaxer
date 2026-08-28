@@ -12,6 +12,7 @@
  */
 
 import type { Message, QueuedJob, RunPhase } from "@larpmaxer/core";
+import { canonicalizeJobUrl } from "@larpmaxer/core";
 import { sendToRuntime } from "../lib/messaging.js";
 import { startRun } from "./run.js";
 
@@ -45,6 +46,9 @@ export async function handleQueueLink(msg: Extract<Message, { type: "QUEUE_LINK"
     return; // panel validates too; silently ignore garbage
   }
   if (parsed.protocol !== "https:") return;
+  // A link copied from a job board is often the SEARCH page with the job as a
+  // query param; canonicalize so the worker tab opens the posting itself.
+  parsed = new URL(canonicalizeJobUrl(parsed.href));
 
   const jobs = await load();
   if (jobs.some((j) => j.url === parsed.href && j.status !== "error")) return; // dedupe

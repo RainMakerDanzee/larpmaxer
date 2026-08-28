@@ -1,7 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import {
   emptyProfile,
-  extractResumeText,
   mergeIntoProfile,
   parseResume,
   profileGaps,
@@ -22,6 +21,7 @@ import {
   storeResumeBytes,
 } from "../../background/storage";
 import { onMessage, sendToRuntime } from "../../lib/messaging";
+import { readResumeBytes } from "../pdfText.js";
 
 /** A resume that has been read but not yet merged — the user confirms first. */
 interface PendingImport {
@@ -183,7 +183,7 @@ export function ProfileView() {
   /** Read bytes into a pending import, or explain why they could not be read. */
   const readResume = async (bytes: Uint8Array, filename: string): Promise<void> => {
     setPending(null);
-    const result = await extractResumeText(bytes, filename);
+    const result = await readResumeBytes(bytes, filename);
     if (!result.ok) {
       setImportNote(result.message);
       setPasteOpen(true);

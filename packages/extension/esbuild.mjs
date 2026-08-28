@@ -103,20 +103,43 @@ const statics = [
     out: join("sidepanel", "demo-shim.js"),
     required: false,
   },
+  // pdf.js does its parsing in a Web Worker; the panel points workerSrc at
+  // this file by a relative URL, so it must sit beside the panel pages.
+  {
+    label: "pdf.js worker",
+    candidates: [
+      "node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
+      "../../node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
+    ],
+    out: join("sidepanel", "pdf.worker.min.mjs"),
+    required: true,
+  },
 ];
 
 // Bundled font files (see styles.css @font-face) — copied as a directory.
 const fontsSrc = first(["src/sidepanel/fonts", "sidepanel/fonts"]);
 
-// Clear dist's CONTENTS, never dist itself: on Windows the directory handle is
-// held open whenever Chrome has the unpacked extension loaded, and removing the
-// root fails with EPERM — which would break the build/reload loop contributors
-// actually use. Emptying in place keeps that loop working.
-if (existsSync(dist)) {
-  for (const entry of readdirSync(dist)) {
-    rmSync(join(dist, entry), { recursive: true, force: true });
+// Clear dist's CONTENTS, never its directories: on Windows, Chrome holds a
+// handle on every dist directory it serves the unpacked extension from (the
+// root, and sidepanel/ while the panel is open), so removing them fails with
+// EPERM — which would break the build/reload loop contributors actually use.
+// Deleting file-by-file and leaving directory shells in place keeps it working.
+const emptyDir = (dir) => {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const target = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      emptyDir(target);
+      try {
+        rmSync(target, { recursive: true, force: true });
+      } catch {
+        // Held open (Chrome) — emptied above, shell stays; copies overwrite.
+      }
+    } else {
+      rmSync(target, { force: true });
+    }
   }
-}
+};
+if (existsSync(dist)) emptyDir(dist);
 mkdirSync(join(dist, "icons"), { recursive: true });
 
 for (const s of statics) {

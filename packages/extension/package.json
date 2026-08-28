@@ -10,6 +10,7 @@
     "dev": "node esbuild.mjs --watch"
   },
   "dependencies": {
-    "@larpmaxer/core": "*"
+    "@larpmaxer/core": "*",
+    "pdfjs-dist": "^6.2.108"
   }
 }
